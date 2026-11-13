@@ -20,7 +20,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/log"
 )
 
 const (

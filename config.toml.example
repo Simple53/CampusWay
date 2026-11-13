@@ -1,68 +1,50 @@
-protocol = "easyconnect" # "easyconnect" or "atrust"
-server_address = "rvpn.zju.edu.cn"
+# NNU-Connect (南京师范大学 EasyConnect 替代客户端) 配置文件示例
+# 网址: https://github.com/nnu-connect/nnu-connect
+
+protocol = "easyconnect"
+server_address = "vpn.njnu.edu.cn"
 server_port = 443
-username = "username"
-password = "password"
-disable_zju_config = false
-disable_zju_dns = false
-socks_bind = ":1080"
-socks_user = ""
-socks_passwd = ""
-http_bind = ":1081"
-shadowsocks_url = "" # "ss://aes-128-gcm:password@:1082"
-dial_direct_proxy = "" # "http://127.0.0.1:7890" or "socks://127.0.0.1:7890"
-tcp_tunnel_mode = false
+username = "your_student_id" # 统一身份认证学工号
+# 推荐在运行前设置环境变量 NNU_CONNECT_PASSWORD，避免在文件中保存密码。
+password = ""
+
+# 核心策略设置（针对 NJNU 优化）
+disable_preset_config = false  # 是否禁用预设规则（默认 false，自动开启 *.njnu.edu.cn 与 *.nnu.edu.cn 分流）
+skip_domain_resource = false   # 默认使用服务端下发的精确分流资源
+disable_remote_dns = false     # 是否禁用远端 DNS
+remote_dns_server = "auto"     # 远端 DNS 服务器（"auto" 表示自动获取）
+secondary_dns_server = "114.114.114.114"
+disable_keep_alive = false
+keep_alive_url = "https://vpn.njnu.edu.cn"
+
+# 本地代理端口设置
+socks_bind = "127.0.0.1:1080"  # 仅监听本机，避免暴露给局域网
+http_bind = "127.0.0.1:1081"
+socks_user = ""                # SOCKS5 用户名（留空表示无需认证）
+socks_passwd = ""              # SOCKS5 密码
+
+# TUN 虚拟网卡全局模式设置 (需要以管理员权限运行且同目录下有 wintun.dll)
 tun_mode = false
 add_route = false
-dns_ttl = 3600
-disable_keep_alive = false
-keep_alive_url = "" # "https://www.cnki.net/favicon.ico"
-zju_dns_server = "auto"
-secondary_dns_server = "114.114.114.114"
-dns_server_bind = ""
 dns_hijack = false
 fake_ip = false
 debug_dump = false
-bind_interface = ""
-auto_detect_interface = false
 
-# Port forwarding
-port_forwarding = [
-#    { network_type = "tcp", bind_address = "127.0.0.1:9898", remote_address = "10.10.98.98:80" },
-#    { network_type = "tcp", bind_address = "127.0.0.1:9899", remote_address = "10.10.98.98:80" },
-#    { network_type = "udp", bind_address = "127.0.0.1:1053", remote_address = "10.10.0.21:53" }
-]
-
-custom_dns = [
-#    { host_name = "appservice.zju.edu.cn", ip = "10.203.8.198"},
-#    { host_name = "www.cc98.org", ip = "10.10.98.98"}
-]
-
-
-# EasyConnect specific settings
-totp_secret = ""
-cert_file = ""
-cert_password = ""
-disable_server_config = false
-skip_domain_resource = false
-disable_multi_line = false
-proxy_all = false
+# 自定义分流域名列表（默认已内置 njnu.edu.cn 与 nnu.edu.cn）
 custom_proxy_domain = [
-#    "science.org",
-#    "nature.com"
+    "ehallapp.nnu.edu.cn",     # 网上办事大厅
+    "zgzj.njnu.edu.cn",        # 正方教务系统
+    "hsnnu.nnu.edu.cn",        # 人事/财务系统
+    # "cnki.net",              # 校外数据库示例
+    # "webofscience.com"
 ]
 
+# 自定义 DNS 解析列表
+custom_dns = [
+    # { host_name = "ehallapp.nnu.edu.cn", ip = "10.10.1.1" }
+]
 
-# aTrust specific settings
-auth_type = "auth/psw"
-login_domain = "Radius"
-client_data_file = "client_data.json"
-graph_code_file = "" # Optional: captcha image will open in browser if this left empty. If set, the program will save the captcha image to this file and ask user to input the code in terminal.
-cas_ticket = ""
-oauth2_code = ""
-phone = ""
-update_best_nodes_interval = 300
-sid = ""
-device_id = ""
-sign_key = ""
-resource_file = ""
+# 端口转发规则 (可选)
+port_forwarding = [
+    # { network_type = "tcp", bind_address = "127.0.0.1:8080", remote_address = "10.10.10.10:80" }
+]

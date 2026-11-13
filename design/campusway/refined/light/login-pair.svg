@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="910" height="884" viewBox="0 0 910 884" role="img" aria-label="校径 CampusWay">
+<!-- Static design only; no VPN connection is attempted. Default theme follows the viewing system.
+Lucide SVG icon sources: https://github.com/lucide-icons/lucide/tree/main/icons
+ISC License
+
+Copyright (c) 2026 Lucide Icons and Contributors
+
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+—-
+
+The following Lucide icons are derived from the Feather project:
+
+airplay, alert-circle, alert-octagon, alert-triangle, aperture, arrow-down-circle, arrow-down-left, arrow-down-right, arrow-down, arrow-left-circle, arrow-left, arrow-right-circle, arrow-right, arrow-up-circle, arrow-up-left, arrow-up-right, arrow-up, at-sign, calendar, cast, check, chevron-down, chevron-left, chevron-right, chevron-up, chevrons-down, chevrons-left, chevrons-right, chevrons-up, circle, clipboard, clock, code, columns, command, compass, corner-down-left, corner-down-right, corner-left-down, corner-left-up, corner-right-down, corner-right-up, corner-up-left, corner-up-right, crosshair, database, divide-circle, divide-square, dollar-sign, download, external-link, feather, frown, hash, headphones, help-circle, info, italic, key, layout, life-buoy, link-2, link, loader, lock, log-in, log-out, maximize, meh, minimize, minimize-2, minus-circle, minus-square, minus, monitor, moon, more-horizontal, more-vertical, move, music, navigation-2, navigation, octagon, pause-circle, percent, plus-circle, plus-square, plus, power, radio, rss, search, server, share, shopping-bag, sidebar, smartphone, smile, square, table-2, tablet, target, terminal, trash-2, trash, triangle, tv, type, upload, x-circle, x-octagon, x-square, x, zoom-in, zoom-out
+
+The MIT License (MIT) (for the icons listed above)
+
+Copyright (c) 2013-present Cole Bemis
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+-->
+<title>校径 CampusWay</title><style>
+:root{color-scheme:light dark;--bg:#ffffff;--side:#f6f6f6;--fill:#f0f0f0;--line:#e3e3e3;--ink:#191919;--muted:#707070;--action:#202020;--on:#ffffff}
+@media(prefers-color-scheme:dark){:root{--bg:#202020;--side:#181818;--fill:#2c2c2c;--line:#3b3b3b;--ink:#ededed;--muted:#aaaaaa;--action:#ededed;--on:#202020}}
+.bg{fill:var(--bg)}.side{fill:var(--side)}.fill{fill:var(--fill)}
+.line{stroke:var(--line);stroke-width:1}.border{stroke:var(--line);stroke-width:1;fill:none}
+text{fill:var(--ink);font:14px 'Segoe UI','Microsoft YaHei',sans-serif}
+.muted{fill:var(--muted)}.small{font-size:12px}.title{font-size:28px;font-weight:600;letter-spacing:-.6px}
+.heading{font-size:18px;font-weight:600}.brand{font-size:19px;font-weight:600}
+.mono{font-family:'Cascadia Code',Consolas,monospace;font-size:13px}
+.icon{fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round;color:var(--ink)}
+.primary{fill:var(--action)}.on{fill:var(--on);font-weight:600}
+:root{--bg:#ffffff;--side:#f6f6f6;--fill:#f0f0f0;--line:#e3e3e3;--ink:#191919;--muted:#707070;--action:#202020;--on:#ffffff}</style><defs><symbol id="route" viewBox="0 0 24 24"><path xmlns="http://www.w3.org/2000/svg" d="M9 5h8.5a1 1 0 010 7h-11a1 1 0 000 7H15" />
+  <circle xmlns="http://www.w3.org/2000/svg" cx="18" cy="19" r="3" />
+  <circle xmlns="http://www.w3.org/2000/svg" cx="6" cy="5" r="3" />
+</symbol><symbol id="plus" viewBox="0 0 24 24"><path xmlns="http://www.w3.org/2000/svg" d="M5 12h14" />
+  <path xmlns="http://www.w3.org/2000/svg" d="M12 5v14" />
+</symbol><symbol id="settings-2" viewBox="0 0 24 24"><path xmlns="http://www.w3.org/2000/svg" d="M14 17H5" />
+  <path xmlns="http://www.w3.org/2000/svg" d="M19 7h-9" />
+  <circle xmlns="http://www.w3.org/2000/svg" cx="17" cy="17" r="3" />
+  <circle xmlns="http://www.w3.org/2000/svg" cx="7" cy="7" r="3" />
+</symbol><symbol id="activity" viewBox="0 0 24 24"><path xmlns="http://www.w3.org/2000/svg" d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" />
+</symbol><symbol id="arrow-right" viewBox="0 0 24 24"><path xmlns="http://www.w3.org/2000/svg" d="M5 12h14" />
+  <path xmlns="http://www.w3.org/2000/svg" d="m12 5 7 7-7 7" />
+</symbol><symbol id="chevron-down" viewBox="0 0 24 24"><path xmlns="http://www.w3.org/2000/svg" d="m6 9 6 6 6-6" />
+</symbol><symbol id="check" viewBox="0 0 24 24"><path xmlns="http://www.w3.org/2000/svg" d="M20 6 9 17l-5-5" />
+</symbol><symbol id="search" viewBox="0 0 24 24"><path xmlns="http://www.w3.org/2000/svg" d="m21 21-4.34-4.34" />
+  <circle xmlns="http://www.w3.org/2000/svg" cx="11" cy="11" r="8" />
+</symbol><symbol id="more-horizontal" viewBox="0 0 24 24"><circle xmlns="http://www.w3.org/2000/svg" cx="12" cy="12" r="1" />
+  <circle xmlns="http://www.w3.org/2000/svg" cx="19" cy="12" r="1" />
+  <circle xmlns="http://www.w3.org/2000/svg" cx="5" cy="12" r="1" />
+</symbol><symbol id="shield" viewBox="0 0 24 24"><path xmlns="http://www.w3.org/2000/svg" d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+</symbol><symbol id="server" viewBox="0 0 24 24"><rect xmlns="http://www.w3.org/2000/svg" width="20" height="8" x="2" y="2" rx="2" ry="2" />
+  <rect xmlns="http://www.w3.org/2000/svg" width="20" height="8" x="2" y="14" rx="2" ry="2" />
+  <line xmlns="http://www.w3.org/2000/svg" x1="6" x2="6.01" y1="6" y2="6" />
+  <line xmlns="http://www.w3.org/2000/svg" x1="6" x2="6.01" y1="18" y2="18" />
+</symbol><symbol id="circle-help" viewBox="0 0 24 24"><circle xmlns="http://www.w3.org/2000/svg" cx="12" cy="12" r="10" />
+  <path xmlns="http://www.w3.org/2000/svg" d="M9 9.5a3 2.5 0 016 0c0 2-2 2-3 3.5" />
+  <path xmlns="http://www.w3.org/2000/svg" d="M12 17h.01" />
+</symbol></defs><rect x="0" y="0" width="910" height="884" rx="0" class="side"/><g transform="translate(20 20)"><rect x="0" y="0" width="460" height="600" rx="0" class="bg"/><use href="#route" x="22" y="14" width="25" height="25" class="icon"/><text x="58" y="34" class="brand" text-anchor="start">校径</text><path d="M0 52H460" class="line"/><path d="M384 26h12M426 20l12 12m0-12l-12 12" class="icon"/><text x="48" y="111" class="title" text-anchor="start">连接校园网络</text><text x="48" y="141" class="muted small" text-anchor="start">添加第一条线路，使用校园账号登录。</text><text x="48" y="185" class="muted small" text-anchor="start">服务器</text><rect x="48" y="195" width="364" height="42" rx="8" class="side"/><rect x="48" y="195" width="364" height="42" rx="8" class="border"/><text x="60" y="222" class="muted" text-anchor="start">vpn.njnu.edu.cn</text><text x="48" y="259" class="muted small" text-anchor="start">协议</text><rect x="48" y="269" width="364" height="42" rx="8" class="side"/><rect x="48" y="269" width="364" height="42" rx="8" class="border"/><text x="60" y="296" class="muted" text-anchor="start">EasyConnect</text><use href="#chevron-down" x="382" y="280" width="18" height="18" class="icon"/><text x="48" y="333" class="muted small" text-anchor="start">学工号</text><rect x="48" y="343" width="364" height="42" rx="8" class="side"/><rect x="48" y="343" width="364" height="42" rx="8" class="border"/><text x="60" y="370" class="muted" text-anchor="start">输入校园账号</text><text x="48" y="407" class="muted small" text-anchor="start">密码</text><rect x="48" y="417" width="364" height="42" rx="8" class="side"/><rect x="48" y="417" width="364" height="42" rx="8" class="border"/><text x="60" y="444" class="muted" text-anchor="start">输入密码</text><rect x="48" y="484" width="16" height="16" rx="4" class="border"/><text x="74" y="497" class="small" text-anchor="start">记住密码</text><rect x="48" y="522" width="364" height="46" rx="8" class="primary"/><text x="230.0" y="550.0" class="on" text-anchor="middle">登录并连接</text></g><g transform="translate(500 20)"><rect x="0" y="0" width="390" height="844" rx="0" class="bg"/><use href="#route" x="24" y="22" width="25" height="25" class="icon"/><text x="60" y="42" class="brand" text-anchor="start">校径</text><text x="24" y="124" class="title" text-anchor="start">连接校园网络</text><text x="24" y="154" class="muted small" text-anchor="start">添加第一条线路，使用校园账号登录。</text><text x="24" y="198" class="muted small" text-anchor="start">服务器</text><rect x="24" y="208" width="342" height="42" rx="8" class="side"/><rect x="24" y="208" width="342" height="42" rx="8" class="border"/><text x="36" y="235" class="muted" text-anchor="start">vpn.njnu.edu.cn</text><text x="24" y="272" class="muted small" text-anchor="start">协议</text><rect x="24" y="282" width="342" height="42" rx="8" class="side"/><rect x="24" y="282" width="342" height="42" rx="8" class="border"/><text x="36" y="309" class="muted" text-anchor="start">EasyConnect</text><use href="#chevron-down" x="336" y="293" width="18" height="18" class="icon"/><text x="24" y="346" class="muted small" text-anchor="start">学工号</text><rect x="24" y="356" width="342" height="42" rx="8" class="side"/><rect x="24" y="356" width="342" height="42" rx="8" class="border"/><text x="36" y="383" class="muted" text-anchor="start">输入校园账号</text><text x="24" y="420" class="muted small" text-anchor="start">密码</text><rect x="24" y="430" width="342" height="42" rx="8" class="side"/><rect x="24" y="430" width="342" height="42" rx="8" class="border"/><text x="36" y="457" class="muted" text-anchor="start">输入密码</text><rect x="24" y="497" width="16" height="16" rx="4" class="border"/><text x="50" y="510" class="small" text-anchor="start">记住密码</text><rect x="24" y="535" width="342" height="46" rx="8" class="primary"/><text x="195.0" y="563.0" class="on" text-anchor="middle">登录并连接</text><text x="24" y="747" class="muted small" text-anchor="start">连接时将请求系统 VPN 授权。</text></g></svg>

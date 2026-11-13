@@ -14,10 +14,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mythologyli/zju-connect/client"
-	"github.com/mythologyli/zju-connect/client/atrust/auth"
-	"github.com/mythologyli/zju-connect/internal/underlay"
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/client"
+	"github.com/nnu-connect/nnu-connect/client/atrust/auth"
+	"github.com/nnu-connect/nnu-connect/internal/underlay"
+	"github.com/nnu-connect/nnu-connect/log"
 	"inet.af/netaddr"
 )
 

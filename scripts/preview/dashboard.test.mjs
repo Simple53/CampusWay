@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import {store} from '../../gui/static/core/store.js';
+import {routes,routeState,connections} from '../../gui/static/pages/connections.js';
+import {networkSpeed,formatBytes} from '../../gui/static/components/home/network-speed.js';
+store.snapshot={profiles:[{id:'a',name:'A',server:'a.demo.invalid',protocol:'atrust'},{id:'b',name:'B',server:'b.demo.invalid',protocol:'easyconnect'}],selected:'b',active:'a',state:'connected',preferences:{view:'grid'},logs:[]};
+assert.equal(routeState(store.snapshot.profiles[0]),'connected');assert.equal(routeState(store.snapshot.profiles[1]),'disconnected');
+assert.ok(!connections().includes('selection-bar'));assert.equal((routes().match(/data-action="edit-route"/g)||[]).length,2);
+store.snapshot.active='';store.snapshot.state='error';store.failedID='a';assert.equal(routeState(store.snapshot.profiles[0]),'error');assert.equal(routeState(store.snapshot.profiles[1]),'disconnected');
+assert.equal(formatBytes(1024),'1.0 KB');assert.equal(formatBytes(NaN),'—');
+store.snapshot.state='connected';store.snapshot.traffic={sampledAt:Date.now(),downloadRate:2048,uploadRate:1024,uploaded:1024,downloaded:2048};assert.ok(networkSpeed().includes('2.0 KB/s'));
+store.snapshot.traffic.sampledAt=Date.now()-6000;assert.ok(!networkSpeed().includes('2.0 KB/s'));
+console.log('Route indicators, independent editing, removed footer and speed freshness passed.');

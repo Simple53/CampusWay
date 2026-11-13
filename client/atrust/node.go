@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mythologyli/zju-connect/internal/ping"
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/internal/ping"
+	"github.com/nnu-connect/nnu-connect/log"
 )
 
 const pingNum = 3

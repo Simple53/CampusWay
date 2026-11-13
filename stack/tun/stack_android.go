@@ -6,8 +6,8 @@ import (
 	"os"
 	"syscall"
 
-	"github.com/mythologyli/zju-connect/client"
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/client"
+	"github.com/nnu-connect/nnu-connect/log"
 	"golang.org/x/net/ipv4"
 )
 

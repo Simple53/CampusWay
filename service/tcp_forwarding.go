@@ -9,9 +9,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mythologyli/zju-connect/internal/hook_func"
-	"github.com/mythologyli/zju-connect/log"
-	"github.com/mythologyli/zju-connect/stack"
+	"github.com/nnu-connect/nnu-connect/internal/hook_func"
+	"github.com/nnu-connect/nnu-connect/log"
+	"github.com/nnu-connect/nnu-connect/stack"
 )
 
 func handleRequest(stack stack.Stack, conn net.Conn, remoteAddress string) {

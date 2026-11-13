@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mythologyli/zju-connect/client"
-	"github.com/mythologyli/zju-connect/log"
-	"github.com/mythologyli/zju-connect/resolve"
-	"github.com/mythologyli/zju-connect/stack"
+	"github.com/nnu-connect/nnu-connect/client"
+	"github.com/nnu-connect/nnu-connect/log"
+	"github.com/nnu-connect/nnu-connect/resolve"
+	"github.com/nnu-connect/nnu-connect/stack"
 )
 
 import (

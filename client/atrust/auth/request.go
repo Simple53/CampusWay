@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/nnu-connect/nnu-connect/internal/authinput"
 	"io"
 	"net/http"
 	"net/url"
@@ -11,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/log"
 )
 
 func (s *Session) authConfig(mod, needTicket bool) (int, []AuthInfo, error) {
@@ -364,7 +365,7 @@ func (s *Session) smsCheckCode(step authStep) (authStep, error) {
 	code := ""
 	log.Println("Tips: Add prefix '$' to sms code to skip secondary authentication")
 	log.Print("Please enter the SMS verification code: ")
-	_, err := fmt.Scanln(&code)
+	_, err := authinput.Read("verification code", nil, &code)
 	if err != nil {
 		return authStep{}, err
 	}

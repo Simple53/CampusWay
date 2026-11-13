@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/log"
 	"github.com/refraction-networking/utls"
 )
 

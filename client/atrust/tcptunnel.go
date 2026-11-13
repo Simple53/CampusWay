@@ -16,9 +16,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mythologyli/zju-connect/client"
-	"github.com/mythologyli/zju-connect/log"
-	"github.com/mythologyli/zju-connect/resolve"
+	"github.com/nnu-connect/nnu-connect/client"
+	"github.com/nnu-connect/nnu-connect/log"
+	"github.com/nnu-connect/nnu-connect/resolve"
 )
 
 type tcpTunnelConn struct {

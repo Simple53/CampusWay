@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+set -euo pipefail
+platform="$1"
+version="0.2.0-alpha.1"
+if [[ "${GITHUB_REF_TYPE:-}" == tag ]]; then version="${GITHUB_REF_NAME#v}"; fi
+[[ "$version" =~ ^[0-9A-Za-z.-]+$ ]] || exit 2
+mkdir -p dist/packages build/staging
+if [[ "$platform" == macos-* ]]; then
+  app="build/staging/CampusWay.app"
+  mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+  go build -buildvcs=false -tags desktop,production -ldflags "-s -w -X main.version=$version" -o "$app/Contents/MacOS/CampusWay" ./gui
+  cp build/assets/campusway.icns "$app/Contents/Resources/"
+  cp LICENSE "$app/Contents/Resources/LICENSE"
+  cp gui/static/icons/LICENSE "$app/Contents/Resources/ICON-LICENSE"
+  cat > "$app/Contents/Info.plist" <<EOF
+<?xml version="1.0" encoding="UTF-8"?><plist version="1.0"><dict>
+<key>CFBundleExecutable</key><string>CampusWay</string><key>CFBundleIdentifier</key><string>app.campusway.desktop</string>
+<key>CFBundleName</key><string>CampusWay</string><key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleShortVersionString</key><string>0.2.0</string><key>CFBundleIconFile</key><string>campusway</string>
+<key>NSHighResolutionCapable</key><true/></dict></plist>
+EOF
+  codesign --force --deep --sign - "$app"
+  hdiutil create -volname CampusWay -srcfolder "$app" -ov -format UDZO "dist/packages/CampusWay-$version-$platform.dmg"
+else
+  root="build/staging/linux"
+  mkdir -p "$root/usr/bin" "$root/usr/share/applications" "$root/usr/share/icons/hicolor/512x512/apps" "$root/usr/share/doc/campusway" "$root/DEBIAN"
+  go build -buildvcs=false -tags desktop,production,webkit2_41 -ldflags "-s -w -X main.version=$version" -o "$root/usr/bin/campusway" ./gui
+  cp build/assets/campusway.png "$root/usr/share/icons/hicolor/512x512/apps/campusway.png"
+  cp LICENSE "$root/usr/share/doc/campusway/copyright"
+  cp gui/static/icons/LICENSE "$root/usr/share/doc/campusway/icon-license"
+  printf '[Desktop Entry]\nType=Application\nName=CampusWay\nExec=campusway\nIcon=campusway\nCategories=Network;\nTerminal=false\n' > "$root/usr/share/applications/campusway.desktop"
+  printf 'Package: campusway\nVersion: %s\nArchitecture: amd64\nMaintainer: CampusWay contributors\nDescription: Campus network connection manager\nDepends: libgtk-3-0, libwebkit2gtk-4.1-0\n' "$version" > "$root/DEBIAN/control"
+  dpkg-deb --build --root-owner-group "$root" "dist/packages/CampusWay-$version-$platform.deb"
+  tar -czf "dist/packages/CampusWay-$version-$platform.tar.gz" -C "$root" usr
+fi

@@ -3,11 +3,11 @@ package auth
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
+	"github.com/nnu-connect/nnu-connect/internal/authinput"
 	"io"
 	"net/http"
 
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/log"
 )
 
 type SMSLogin struct {
@@ -39,7 +39,7 @@ func (s *Session) loginAuthSmsCheckCode(phone, loginDomain, graphCodeFile string
 
 	code := ""
 	log.Print("Please enter the SMS verification code: ")
-	_, err = fmt.Scanln(&code)
+	_, err = authinput.Read("SMS code", nil, &code)
 	if err != nil {
 		return err
 	}

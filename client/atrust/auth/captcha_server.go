@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/log"
 )
 
 const captchaPageHTML = `<!DOCTYPE html>

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mythologyli/zju-connect/client"
+	"github.com/nnu-connect/nnu-connect/client"
 )
 
 type L3Tunnel struct {

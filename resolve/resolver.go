@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/mythologyli/zju-connect/client"
-	"github.com/mythologyli/zju-connect/internal/ippool"
-	"github.com/mythologyli/zju-connect/log"
-	"github.com/mythologyli/zju-connect/stack"
+	"github.com/nnu-connect/nnu-connect/client"
+	"github.com/nnu-connect/nnu-connect/internal/ippool"
+	"github.com/nnu-connect/nnu-connect/log"
+	"github.com/nnu-connect/nnu-connect/stack"
 	"github.com/patrickmn/go-cache"
 )
 

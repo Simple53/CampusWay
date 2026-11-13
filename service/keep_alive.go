@@ -7,9 +7,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/mythologyli/zju-connect/dial"
-	"github.com/mythologyli/zju-connect/log"
-	"github.com/mythologyli/zju-connect/resolve"
+	"github.com/nnu-connect/nnu-connect/dial"
+	"github.com/nnu-connect/nnu-connect/log"
+	"github.com/nnu-connect/nnu-connect/resolve"
 )
 
 func KeepAlive(ctx context.Context, resolver *resolve.Resolver, dialer *dial.Dialer, keepAliveURL string) {

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/log"
 )
 
 func (c *Client) getIP() error {

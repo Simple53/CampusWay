@@ -4,7 +4,7 @@ import (
 	"context"
 	"sync"
 
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/log"
 )
 
 type TerminalFunc func(ctx context.Context) error
@@ -17,6 +17,18 @@ var terminalFuncList []TerminalItem
 
 var terminalBegin = false
 var terminalMu sync.Mutex
+
+// BeginTerminalSession starts a fresh cleanup scope for a new VPN session.
+// ZJU-Connect originally had a process-lifetime cleanup registry because the
+// CLI only connected once. The desktop client can connect more than once, so
+// stale cleanup functions and the terminal flag must not leak across sessions.
+func BeginTerminalSession() {
+	terminalMu.Lock()
+	defer terminalMu.Unlock()
+
+	terminalFuncList = nil
+	terminalBegin = false
+}
 
 func RegisterTerminalFunc(execName string, fun TerminalFunc) {
 	terminalMu.Lock()

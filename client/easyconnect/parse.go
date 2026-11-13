@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/beevik/etree"
-	"github.com/mythologyli/zju-connect/client"
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/client"
+	"github.com/nnu-connect/nnu-connect/log"
 	"inet.af/netaddr"
 )
 

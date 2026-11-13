@@ -2,11 +2,12 @@ package auth
 
 import (
 	"fmt"
+	"github.com/nnu-connect/nnu-connect/internal/authinput"
 	"io"
 	"net/http"
 	"net/url"
 
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/log"
 )
 
 type HTTPSOauth2Login struct {
@@ -60,7 +61,7 @@ func (s *Session) interactiveHttpsOauth2(loginURL string) (string, error) {
 	log.Printf("Visit %s to login, and catch the callback url", loginURL)
 	log.Println("Please enter the callback url:")
 	var callback string
-	_, err := fmt.Scanln(&callback)
+	_, err := authinput.Read("OAuth callback URL", nil, &callback)
 	if err != nil {
 		return "", err
 	}

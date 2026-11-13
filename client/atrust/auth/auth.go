@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/nnu-connect/nnu-connect/internal/authinput"
 	mathrand "math/rand"
 	"net"
 	"net/http"
@@ -15,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/log"
 )
 
 const (
@@ -155,7 +156,12 @@ func (s *Session) withGraphCheckCode(process func(string) (int, error), graphCod
 		}
 
 		var graphCheckCode string
-		if graphCodeFile != "" {
+		if authinput.Handler != nil {
+			_, err = authinput.Read("captcha JSON", imgData, &graphCheckCode)
+			if err != nil {
+				return err
+			}
+		} else if graphCodeFile != "" {
 			if writeErr := os.WriteFile(graphCodeFile, imgData, 0644); writeErr != nil {
 				log.Printf("Warning: failed to write graph code image to %s: %v", graphCodeFile, writeErr)
 			} else {
@@ -163,7 +169,7 @@ func (s *Session) withGraphCheckCode(process func(string) (int, error), graphCod
 			}
 
 			log.Print("Please enter the graph check code JSON: ")
-			_, err = fmt.Scanln(&graphCheckCode)
+			_, err = authinput.Read("captcha JSON", imgData, &graphCheckCode)
 			if err != nil {
 				return err
 			}

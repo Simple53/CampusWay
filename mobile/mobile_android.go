@@ -4,9 +4,9 @@ import (
 	"crypto/tls"
 	"sync"
 
-	"github.com/mythologyli/zju-connect/client/easyconnect"
-	"github.com/mythologyli/zju-connect/log"
-	"github.com/mythologyli/zju-connect/stack/tun"
+	"github.com/nnu-connect/nnu-connect/client/easyconnect"
+	"github.com/nnu-connect/nnu-connect/log"
+	"github.com/nnu-connect/nnu-connect/stack/tun"
 )
 
 var vpnClient *easyconnect.Client

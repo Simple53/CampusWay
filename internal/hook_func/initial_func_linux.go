@@ -4,8 +4,8 @@ import (
 	"context"
 	"os/user"
 
-	"github.com/mythologyli/zju-connect/configs"
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/configs"
+	"github.com/nnu-connect/nnu-connect/log"
 )
 
 func init() {

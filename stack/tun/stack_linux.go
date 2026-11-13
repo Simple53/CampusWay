@@ -11,9 +11,9 @@ import (
 	"syscall"
 
 	tun "github.com/mythologyli/sing-tun"
-	"github.com/mythologyli/zju-connect/client"
-	"github.com/mythologyli/zju-connect/internal/hook_func"
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/client"
+	"github.com/nnu-connect/nnu-connect/internal/hook_func"
+	"github.com/nnu-connect/nnu-connect/log"
 )
 
 type Endpoint struct {
@@ -69,7 +69,7 @@ func NewStack(client client.Client, dnsHijack, fakeIP bool, ipResources []client
 		return nil, err
 	}
 	ipPrefix, _ := netip.ParsePrefix(s.endpoint.ip.String() + "/32")
-	tunName := "ZJU-Connect"
+	tunName := "NNU-Connect"
 	tunName = tun.CalculateInterfaceName(tunName)
 
 	tunOptions := tun.Options{

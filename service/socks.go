@@ -6,14 +6,21 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/mythologyli/zju-connect/dial"
-	"github.com/mythologyli/zju-connect/internal/hook_func"
-	"github.com/mythologyli/zju-connect/log"
-	"github.com/mythologyli/zju-connect/resolve"
+	"github.com/nnu-connect/nnu-connect/dial"
+	"github.com/nnu-connect/nnu-connect/internal/hook_func"
+	"github.com/nnu-connect/nnu-connect/internal/traffic"
+	"github.com/nnu-connect/nnu-connect/log"
+	"github.com/nnu-connect/nnu-connect/resolve"
 	"github.com/things-go/go-socks5"
 )
 
 func ServeSocks5(bindAddr string, dialer *dial.Dialer, resolver *resolve.Resolver, user string, password string) {
+	if err := StartSocks5(bindAddr, dialer, resolver, user, password); err != nil {
+		log.Println(err)
+	}
+}
+
+func StartSocks5(bindAddr string, dialer *dial.Dialer, resolver *resolve.Resolver, user string, password string) error {
 	var authMethods []socks5.Authenticator
 	if user != "" && password != "" {
 		authMethods = append(authMethods, socks5.UserPassAuthenticator{
@@ -29,7 +36,16 @@ func ServeSocks5(bindAddr string, dialer *dial.Dialer, resolver *resolve.Resolve
 	server := socks5.NewServer(
 		socks5.WithAuthMethods(authMethods),
 		socks5.WithResolver(resolver),
-		socks5.WithDial(dialer.DialIPPort),
+		socks5.WithDial(func(ctx context.Context, network, addr string) (net.Conn, error) {
+			c, err := dialer.DialIPPort(ctx, network, addr)
+			if err != nil {
+				return nil, err
+			}
+			if network != "tcp" {
+				return c, nil
+			}
+			return traffic.Wrap(c), nil
+		}),
 		socks5.WithLogger(socks5.NewLogger(log.NewLogger("[SOCKS5] "))),
 	)
 
@@ -37,7 +53,7 @@ func ServeSocks5(bindAddr string, dialer *dial.Dialer, resolver *resolve.Resolve
 
 	listener, err := net.Listen("tcp", bindAddr)
 	if err != nil {
-		panic("SOCKS5 listen failed: " + err.Error())
+		return fmt.Errorf("SOCKS5 listen failed: %w", err)
 	}
 
 	hook_func.RegisterTerminalFunc("CloseSocks5Listener", func(ctx context.Context) error {
@@ -48,11 +64,14 @@ func ServeSocks5(bindAddr string, dialer *dial.Dialer, resolver *resolve.Resolve
 		return nil
 	})
 
-	if err = server.Serve(listener); err != nil {
-		if errors.Is(err, net.ErrClosed) {
-			log.Println("SOCKS5 server closed")
-		} else {
-			log.Println("SOCKS5 listen failed: " + err.Error())
+	go func() {
+		if err := server.Serve(listener); err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				log.Println("SOCKS5 server closed")
+			} else {
+				log.Println("SOCKS5 listen failed: " + err.Error())
+			}
 		}
-	}
+	}()
+	return nil
 }

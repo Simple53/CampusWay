@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/log"
 )
 
 // TCPing ...

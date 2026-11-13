@@ -4,9 +4,9 @@ import (
 	"context"
 	"net"
 
-	"github.com/mythologyli/zju-connect/client"
-	"github.com/mythologyli/zju-connect/internal/ippool"
-	"github.com/mythologyli/zju-connect/internal/zcdns"
+	"github.com/nnu-connect/nnu-connect/client"
+	"github.com/nnu-connect/nnu-connect/internal/ippool"
+	"github.com/nnu-connect/nnu-connect/internal/zcdns"
 )
 
 type Stack interface {

@@ -11,6 +11,7 @@ import (
 	"encoding/xml"
 	"errors"
 	"fmt"
+	"github.com/nnu-connect/nnu-connect/internal/authinput"
 	"io"
 	"math/big"
 	"net"
@@ -24,7 +25,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/log"
 	"github.com/pquerna/otp/totp"
 	utls "github.com/refraction-networking/utls"
 )
@@ -135,7 +136,7 @@ func (c *Client) loginAuthAndPsw(graphCodeFile string) error {
 
 	randCode := ""
 	if rndImg == "1" {
-		if graphCodeFile != "" {
+		if graphCodeFile != "" || authinput.Handler != nil {
 			addr = "https://" + c.server + "/por/rand_code.csp?apiversion=1"
 			log.Printf("Request: %s", addr)
 			req, err := http.NewRequest("GET", addr, nil)
@@ -156,14 +157,19 @@ func (c *Client) loginAuthAndPsw(graphCodeFile string) error {
 				_ = Body.Close()
 			}(resp.Body)
 
-			if writeErr := os.WriteFile(graphCodeFile, buf.Bytes(), 0644); writeErr != nil {
+			if writeErr := func() error {
+				if graphCodeFile == "" {
+					return nil
+				}
+				return os.WriteFile(graphCodeFile, buf.Bytes(), 0600)
+			}(); writeErr != nil {
 				log.Printf("Warning: failed to write graph code image to %s: %v", graphCodeFile, writeErr)
 			} else {
 				log.Printf("Graph check code saved to %s", graphCodeFile)
 			}
 
 			fmt.Print("Please enter rand code: ")
-			_, err = fmt.Scan(&randCode)
+			_, err = authinput.Read("image verification code", buf.Bytes(), &randCode)
 			if err != nil {
 				return err
 			}
@@ -272,7 +278,7 @@ func (c *Client) loginSMS() error {
 
 	fmt.Print("Please enter your SMS code: ")
 	smsCode := ""
-	_, err = fmt.Scan(&smsCode)
+	_, err = authinput.Read("SMS code", nil, &smsCode)
 	if err != nil {
 		return err
 	}
@@ -323,7 +329,7 @@ func (c *Client) loginTOTP() error {
 	var err error
 	if c.totpSecret == "" {
 		fmt.Print("Please enter your TOTP code:")
-		_, err = fmt.Scan(&totpCode)
+		_, err = authinput.Read("authenticator code", nil, &totpCode)
 	} else {
 		totpCode, err = totp.GenerateCode(c.totpSecret, time.Now())
 		fmt.Println("Generate TOTP code:", totpCode)

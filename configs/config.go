@@ -85,7 +85,9 @@ type (
 		DisableServerConfig     *bool                      `toml:"disable_server_config"`
 		SkipDomainResource      *bool                      `toml:"skip_domain_resource"`
 		DisableZJUConfig        *bool                      `toml:"disable_zju_config"`
-		DisableRemoteDNS        *bool                      `toml:"disable_zju_dns"` // TODO: rename to disable_remote_dns
+		DisablePresetConfig     *bool                      `toml:"disable_preset_config"`
+		DisableRemoteDNS        *bool                      `toml:"disable_remote_dns"`
+		DisableZJUDNS           *bool                      `toml:"disable_zju_dns"`
 		DisableMultiLine        *bool                      `toml:"disable_multi_line"`
 		ProxyAll                *bool                      `toml:"proxy_all"`
 		SocksBind               *string                    `toml:"socks_bind"`
@@ -100,7 +102,8 @@ type (
 		DNSTTL                  *uint64                    `toml:"dns_ttl"`
 		DisableKeepAlive        *bool                      `toml:"disable_keep_alive"`
 		KeepAliveURL            *string                    `toml:"keep_alive_url"`
-		RemoteDNSServer         *string                    `toml:"zju_dns_server"` // TODO: rename to remote_dns_server
+		RemoteDNSServer         *string                    `toml:"remote_dns_server"`
+		ZJUDNSServer            *string                    `toml:"zju_dns_server"`
 		SecondaryDNSServer      *string                    `toml:"secondary_dns_server"`
 		DNSServerBind           *string                    `toml:"dns_server_bind"`
 		DNSHijack               *bool                      `toml:"dns_hijack"`

@@ -1,23 +1,10 @@
 name: Build Android
 
 on:
-  release:
-    types: [ published ]
-  push:
-    paths:
-      - "**/*.go"
-      - "go.mod"
-      - "go.sum"
-      - ".github/workflows/*.yml"
-  pull_request:
-    types:
-      - opened
-    paths:
-      - "**/*.go"
-      - "go.mod"
-      - "go.sum"
+  workflow_dispatch:
 
-permissions: write-all
+permissions:
+  contents: read
 
 jobs:
   build:
@@ -25,10 +12,10 @@ jobs:
 
     steps:
       - name: Checkout codebase
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
           go-version: ^1.25
 

@@ -7,11 +7,13 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 
-	"github.com/mythologyli/zju-connect/dial"
-	"github.com/mythologyli/zju-connect/internal/hook_func"
-	"github.com/mythologyli/zju-connect/log"
+	"github.com/nnu-connect/nnu-connect/dial"
+	"github.com/nnu-connect/nnu-connect/internal/hook_func"
+	"github.com/nnu-connect/nnu-connect/internal/traffic"
+	"github.com/nnu-connect/nnu-connect/log"
 )
 
 // The MIT License (MIT)
@@ -36,10 +38,25 @@ import (
 // CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 func ServeHTTP(bindAddr string, dialer *dial.Dialer) {
+	if err := StartHTTP(bindAddr, dialer); err != nil {
+		log.Println(err)
+	}
+}
+
+func StartHTTP(bindAddr string, dialer *dial.Dialer) error {
+	listener, err := net.Listen("tcp", bindAddr)
+	if err != nil {
+		return err
+	}
+	var connections sync.Map
 	client := &http.Client{
 		Transport: &http.Transport{
 			DialContext: func(ctx context.Context, net, addr string) (net.Conn, error) {
-				return dialer.Dial(ctx, net, addr)
+				c, err := dialer.Dial(ctx, net, addr)
+				if err != nil {
+					return nil, err
+				}
+				return traffic.Wrap(c), nil
 			},
 		},
 		// We must pass redirect response to browser
@@ -57,6 +74,7 @@ func ServeHTTP(bindAddr string, dialer *dial.Dialer) {
 				return
 			}
 
+			serverConn = traffic.Wrap(serverConn)
 			hijacker, ok := w.(http.Hijacker)
 			if !ok {
 				_ = serverConn.Close()
@@ -67,7 +85,7 @@ func ServeHTTP(bindAddr string, dialer *dial.Dialer) {
 
 			w.WriteHeader(200)
 
-			_, bio, err := hijacker.Hijack()
+			clientConn, bio, err := hijacker.Hijack()
 			if err != nil {
 				w.WriteHeader(500)
 				_, _ = w.Write([]byte(err.Error() + "\n"))
@@ -75,12 +93,10 @@ func ServeHTTP(bindAddr string, dialer *dial.Dialer) {
 				return
 			}
 
-			go func() {
-				_, _ = io.Copy(serverConn, bio)
-			}()
-			go func() {
-				_, _ = io.Copy(bio, serverConn)
-			}()
+			connections.Store(clientConn, serverConn)
+			closePair := func() { clientConn.Close(); serverConn.Close(); connections.Delete(clientConn) }
+			go func() { defer closePair(); _, _ = io.Copy(serverConn, bio) }()
+			go func() { defer closePair(); _, _ = io.Copy(clientConn, serverConn) }()
 		} else {
 			req.RequestURI = ""
 
@@ -91,6 +107,7 @@ func ServeHTTP(bindAddr string, dialer *dial.Dialer) {
 				return
 			}
 
+			defer resp.Body.Close()
 			hdr := w.Header()
 			for k, v := range resp.Header {
 				hdr[k] = v
@@ -108,6 +125,8 @@ func ServeHTTP(bindAddr string, dialer *dial.Dialer) {
 
 	hook_func.RegisterTerminalFunc("CloseHTTPListener", func(ctx context.Context) error {
 		log.Println("Closing HTTP listener...")
+		connections.Range(func(k, v any) bool { k.(net.Conn).Close(); v.(net.Conn).Close(); return true })
+		client.CloseIdleConnections()
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := server.Shutdown(ctx); err != nil {
@@ -116,11 +135,14 @@ func ServeHTTP(bindAddr string, dialer *dial.Dialer) {
 		return nil
 	})
 
-	if err := server.ListenAndServe(); err != nil {
-		if errors.Is(err, http.ErrServerClosed) {
-			log.Println("HTTP server closed")
-		} else {
-			log.Println("HTTP listen failed: " + err.Error())
+	go func() {
+		if err := server.Serve(listener); err != nil {
+			if errors.Is(err, http.ErrServerClosed) {
+				log.Println("HTTP server closed")
+			} else {
+				log.Println("HTTP listen failed: " + err.Error())
+			}
 		}
-	}
+	}()
+	return nil
 }
