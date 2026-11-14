@@ -25,14 +25,33 @@ func main() {
 	app := newApp()
 	assets, _ := fs.Sub(staticFS, "static")
 	var appCtx context.Context
+	var tray *systemTray
 	width, height := 760, 620
 	if len(app.config.Profiles) > 1 {
 		width, height = 800, 620
 	}
-	err := wails.Run(&options.App{Title: "CampusWay", Width: width, Height: height, MinWidth: 390, MinHeight: 560,
-		AssetServer: &assetserver.Options{Assets: assets}, Bind: []interface{}{app}, Windows: &windows.Options{Theme: windows.SystemDefault},
+	quitting := false
+
+	err := wails.Run(&options.App{
+		Title:             "CampusWay",
+		Width:             width,
+		Height:            height,
+		MinWidth:          390,
+		MinHeight:         560,
+		HideWindowOnClose: true,
+		AssetServer:       &assetserver.Options{Assets: assets},
+		Bind:              []interface{}{app},
+		Windows:           &windows.Options{Theme: windows.SystemDefault},
 		OnStartup: func(ctx context.Context) {
 			appCtx = ctx
+			tray = setupTray(ctx, app, func() {
+				quitting = true
+				_ = app.Disconnect()
+				if tray != nil {
+					tray.destroy()
+				}
+				runtime.Quit(ctx)
+			})
 			app.resize = func(manager bool) {
 				if manager {
 					runtime.WindowSetMinSize(ctx, 390, 560)
@@ -44,18 +63,31 @@ func main() {
 			}
 		},
 		OnBeforeClose: func(ctx context.Context) bool {
-			if err := app.Disconnect(); err != nil {
-				_, _ = runtime.MessageDialog(ctx, runtime.MessageDialogOptions{Type: runtime.WarningDialog, Title: "CampusWay", Message: err.Error()})
-				return true
+			if quitting {
+				if err := app.Disconnect(); err != nil {
+					_, _ = runtime.MessageDialog(ctx, runtime.MessageDialogOptions{Type: runtime.WarningDialog, Title: "CampusWay", Message: err.Error()})
+					return true
+				}
+				return false
 			}
-			return false
+			// Minimize / Hide to tray on close
+			runtime.WindowHide(ctx)
+			return true
 		},
-		SingleInstanceLock: &options.SingleInstanceLock{UniqueId: "campusway-desktop-v1", OnSecondInstanceLaunch: func(options.SecondInstanceData) {
-			if appCtx != nil {
-				runtime.WindowUnminimise(appCtx)
-				runtime.WindowShow(appCtx)
+		OnShutdown: func(ctx context.Context) {
+			if tray != nil {
+				tray.destroy()
 			}
-		}},
+		},
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId: "campusway-desktop-v1",
+			OnSecondInstanceLaunch: func(options.SecondInstanceData) {
+				if appCtx != nil {
+					runtime.WindowUnminimise(appCtx)
+					runtime.WindowShow(appCtx)
+				}
+			},
+		},
 	})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)

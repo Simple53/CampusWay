@@ -113,14 +113,22 @@ func runEngine() {
 	}()
 
 	err := engine.Run(ctx, conf, func(state, msg string) {
-		if state == "disconnected" || state == "error" {
+		if state == "disconnected" {
+			return
+		}
+		if state == "error" {
+			emit(Event{Kind: "state", State: "error", Message: msg})
 			return
 		}
 		messages := map[string]string{"connecting": "Connecting to your gateway", "connected": "Connected", "disconnecting": "Disconnecting"}
-		emit(Event{Kind: "state", State: state, Message: messages[state]})
+		m := messages[state]
+		if m == "" {
+			m = msg
+		}
+		emit(Event{Kind: "state", State: state, Message: m})
 	})
 	if err != nil && ctx.Err() == nil {
-		emit(Event{Kind: "state", State: "error", Message: "Could not connect. Check your gateway, credentials, verification response and local ports."})
+		emit(Event{Kind: "state", State: "error", Message: err.Error()})
 		os.Exit(1)
 	}
 }

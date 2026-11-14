@@ -321,6 +321,10 @@ func (s *AppServer) SaveProfile(p Profile, password string) (Profile, error) {
 		return Profile{}, errors.New("Disconnect before editing the active profile")
 	}
 	changed := index >= 0 && (c.Profiles[index].Server != p.Server || c.Profiles[index].Port != p.Port || c.Profiles[index].Username != p.Username || c.Profiles[index].Protocol != p.Protocol || c.Profiles[index].Options.LoginDomain != p.Options.LoginDomain || (c.Profiles[index].Options.AuthType != "" && c.Profiles[index].Options.AuthType != p.Options.AuthType))
+	oldID := ""
+	if index >= 0 {
+		oldID = c.Profiles[index].ID
+	}
 	// Identity changes get a fresh credential slot before any secret is written.
 	if changed {
 		p.ID = identifier()
@@ -337,10 +341,6 @@ func (s *AppServer) SaveProfile(p Profile, password string) (Profile, error) {
 			p.HasPassword = true
 		}
 	}
-	oldID := ""
-	if index >= 0 {
-		oldID = c.Profiles[index].ID
-	}
 	if !p.Remember && oldID != "" {
 		if err := deleteCredential(s.secretPath(oldID)); err != nil && !os.IsNotExist(err) {
 			return Profile{}, err
@@ -356,7 +356,7 @@ func (s *AppServer) SaveProfile(p Profile, password string) (Profile, error) {
 		return Profile{}, err
 	}
 	s.config = c
-	if changed {
+	if changed && oldID != "" {
 		_ = deleteCredential(s.secretPath(oldID))
 	}
 	return p, nil
@@ -428,7 +428,7 @@ func (s *AppServer) SavePreferences(p Preferences) error {
 	if !oneOf(p.Language, "zh-CN", "en") {
 		return errors.New("Unsupported language")
 	}
-	if !oneOf(p.Theme, "system", "light", "dark") || !oneOf(p.View, "table", "grid") || !oneOf(p.Density, "comfortable", "standard", "compact") || !oneOf(p.Sort, "default", "name") {
+	if !oneOf(p.Theme, "system", "light", "dark") || !oneOf(p.View, "table", "grid") || !oneOf(p.Density, "comfortable", "standard", "compact", "ultra-compact") || !oneOf(p.Sort, "default", "name") {
 		return errors.New("Invalid display preferences")
 	}
 	s.mu.Lock()
@@ -472,7 +472,7 @@ func (s *AppServer) record(state, message string) {
 		s.logs = s.logs[len(s.logs)-500:]
 	}
 }
-func (s *AppServer) Connect(id, password string) error {
+func (s *AppServer) Connect(id, password string, remember bool) error {
 	if !s.operation.TryLock() {
 		return errors.New("Another connection operation is in progress")
 	}
@@ -508,6 +508,23 @@ func (s *AppServer) Connect(id, password string) error {
 		s.mu.Unlock()
 		return errors.New("Enter your password")
 	}
+
+	// Persist password locally if requested or if profile is configured to remember
+	if password != "" && (remember || p.Remember) && canRemember() {
+		if err := saveCredential(s.secretPath(id), password); err == nil {
+			for i := range s.config.Profiles {
+				if s.config.Profiles[i].ID == id {
+					s.config.Profiles[i].Remember = true
+					s.config.Profiles[i].HasPassword = true
+					p.Remember = true
+					p.HasPassword = true
+					_ = s.persist(s.config)
+					break
+				}
+			}
+		}
+	}
+
 	s.mu.Unlock()
 	if err := s.stop(); err != nil {
 		return err

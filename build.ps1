@@ -31,6 +31,9 @@ New-Item -ItemType Directory -Force $out | Out-Null
 & $GoBin build -buildvcs=false -tags desktop,production -ldflags "-H=windowsgui -s -w -X main.version=$Version" -o "$out/CampusWay.exe" ./gui
 if ($LASTEXITCODE) { throw 'Desktop build failed' }
 
+# Copy to root directory for easy access
+Copy-Item "$out/CampusWay.exe" "$PSScriptRoot/CampusWay.exe" -Force
+
 Copy-Item LICENSE "$out/LICENSE"
 Copy-Item gui/static/icons/LICENSE "$out/ICON-LICENSE" -ErrorAction Stop
 
@@ -42,6 +45,7 @@ $hashTargets = @("$out/CampusWay.exe", $zip)
 if ($WithCLI) {
     & $GoBin build -buildvcs=false -ldflags "-s -w -X 'main.CommitID=$Version'" -o "$out/campusway-cli.exe" .
     if ($LASTEXITCODE) { throw 'CLI build failed' }
+    Copy-Item "$out/campusway-cli.exe" "$PSScriptRoot/campusway-cli.exe" -Force
     $cliZip = "$out/campusway-cli-$Version-windows-x64.zip"
     Compress-Archive -Force -Path "$out/campusway-cli.exe", "$out/LICENSE" -DestinationPath $cliZip
     $hashTargets += @("$out/campusway-cli.exe", $cliZip)
