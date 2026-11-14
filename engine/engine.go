@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 
 	"github.com/nnu-connect/nnu-connect/client"
 	atrustclient "github.com/nnu-connect/nnu-connect/client/atrust"
@@ -26,13 +27,36 @@ import (
 
 type StatusCallback func(status string, message string)
 
+func deriveGatewayRootDomain(serverAddr string) string {
+	host := strings.TrimSpace(serverAddr)
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		host = h
+	}
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	if host == "" || net.ParseIP(host) != nil {
+		return ""
+	}
+	labels := strings.Split(host, ".")
+	if len(labels) < 2 {
+		return ""
+	}
+	if len(labels) >= 3 {
+		lastTwo := labels[len(labels)-2] + "." + labels[len(labels)-1]
+		switch lastTwo {
+		case "edu.cn", "ac.cn", "org.cn", "com.cn", "gov.cn", "net.cn":
+			return strings.Join(labels[len(labels)-3:], ".")
+		}
+	}
+	return strings.Join(labels[len(labels)-2:], ".")
+}
+
 // Run runs the VPN engine lifecycle until ctx is cancelled.
 func Run(ctx context.Context, conf configs.Config, onStatus StatusCallback) error {
 	hook_func.BeginTerminalSession()
 	defer func() {
 		if errs := hook_func.ExecTerminalFunc(context.Background()); errs != nil {
 			for _, err := range errs {
-				log.Printf("Shutdown NNU-Connect hook error: %s", err)
+				log.Printf("Shutdown CampusWay hook error: %s", err)
 			}
 		}
 	}()
@@ -47,7 +71,7 @@ func Run(ctx context.Context, conf configs.Config, onStatus StatusCallback) erro
 
 	if errs := hook_func.ExecInitialFunc(ctx, conf); errs != nil {
 		for _, err := range errs {
-			log.Printf("Initial NNU-Connect failed: %s", err)
+			log.Printf("Initial CampusWay failed: %s", err)
 		}
 		if onStatus != nil {
 			onStatus("error", fmt.Sprintf("初始化失败: %v", errs[0]))
@@ -178,18 +202,13 @@ func Run(ctx context.Context, conf configs.Config, onStatus StatusCallback) erro
 	dnsResource, _ := vpnClient.DNSResource()
 
 	if conf.Protocol == "easyconnect" {
-		if !conf.DisableZJUConfig {
+		if !conf.DisablePresetConfig {
 			if domainResources == nil {
 				domainResources = make(map[string]client.DomainResource)
 			}
 
-			// Pre-configure NJNU core domains
-			nnuDomains := []string{
-				"njnu.edu.cn",
-				"nnu.edu.cn",
-			}
-			for _, d := range nnuDomains {
-				domainResources[d] = client.DomainResource{
+			if rootDomain := deriveGatewayRootDomain(conf.ServerAddress); rootDomain != "" {
+				domainResources[rootDomain] = client.DomainResource{
 					PortMin:  1,
 					PortMax:  65535,
 					Protocol: "all",
@@ -204,7 +223,7 @@ func Run(ctx context.Context, conf configs.Config, onStatus StatusCallback) erro
 			// 10.0.0.0/8 can overlap with the user's LAN and are not safe defaults.
 		}
 
-		// Add custom proxy domains (e.g. ehallapp.nnu.edu.cn, zgzj.njnu.edu.cn, etc.)
+		// Add user-configured custom proxy domains
 		if domainResources == nil {
 			domainResources = make(map[string]client.DomainResource)
 		}
@@ -340,15 +359,21 @@ func Run(ctx context.Context, conf configs.Config, onStatus StatusCallback) erro
 
 	if !conf.DisableKeepAlive {
 		keepAliveURL := conf.KeepAliveURL
-		if keepAliveURL == "" {
-			keepAliveURL = "https://vpn.njnu.edu.cn"
+		if keepAliveURL == "" && conf.ServerAddress != "" {
+			if conf.ServerPort > 0 && conf.ServerPort != 443 {
+				keepAliveURL = fmt.Sprintf("https://%s:%d", conf.ServerAddress, conf.ServerPort)
+			} else {
+				keepAliveURL = "https://" + conf.ServerAddress
+			}
 		}
-		keepAliveCtx, keepAliveCancel := context.WithCancel(context.Background())
-		hook_func.RegisterTerminalFunc("CloseKeepAlive", func(ctx context.Context) error {
-			keepAliveCancel()
-			return nil
-		})
-		go service.KeepAlive(keepAliveCtx, vpnResolver, vpnDialer, keepAliveURL)
+		if keepAliveURL != "" {
+			keepAliveCtx, keepAliveCancel := context.WithCancel(context.Background())
+			hook_func.RegisterTerminalFunc("CloseKeepAlive", func(ctx context.Context) error {
+				keepAliveCancel()
+				return nil
+			})
+			go service.KeepAlive(keepAliveCtx, vpnResolver, vpnDialer, keepAliveURL)
+		}
 	}
 
 	if onStatus != nil {
@@ -358,12 +383,12 @@ func Run(ctx context.Context, conf configs.Config, onStatus StatusCallback) erro
 	// Block until context canceled
 	<-ctx.Done()
 
-	log.Println("Shutting down NNU-Connect ......")
+	log.Println("Shutting down CampusWay ......")
 	if onStatus != nil {
 		onStatus("disconnecting", "正在断开连接并清理网络规则...")
 	}
 
-	log.Println("NNU-Connect shutdown complete. Bye~")
+	log.Println("CampusWay shutdown complete. Bye~")
 	if onStatus != nil {
 		onStatus("disconnected", "已断开连接")
 	}

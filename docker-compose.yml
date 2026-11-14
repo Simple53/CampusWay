@@ -1,14 +1,12 @@
-version: '3'
-
 services:
-  nnu-connect:
+  campusway:
     build:
       context: .
-    image: nnu-connect
-    container_name: nnu-connect
+    image: campusway
+    container_name: campusway
     restart: unless-stopped
     ports:
-      - "1080:1080"
-      - "1081:1081"
+      - "127.0.0.1:1080:1080"
+      - "127.0.0.1:1081:1081"
     volumes:
       - ./config.toml:/home/nonroot/config.toml

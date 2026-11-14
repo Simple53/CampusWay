@@ -19,7 +19,7 @@ var terminalBegin = false
 var terminalMu sync.Mutex
 
 // BeginTerminalSession starts a fresh cleanup scope for a new VPN session.
-// ZJU-Connect originally had a process-lifetime cleanup registry because the
+// The upstream client originally had a process-lifetime cleanup registry because the
 // CLI only connected once. The desktop client can connect more than once, so
 // stale cleanup functions and the terminal flag must not leak across sessions.
 func BeginTerminalSession() {

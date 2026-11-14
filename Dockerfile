@@ -16,10 +16,10 @@ FROM base AS build
 RUN --mount=target=. \
     --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    go build -v -o /app/nnu-connect -trimpath -ldflags "-s -w -buildid= ${COMMIT_FLAG}" .
+    go build -v -o /app/campusway -trimpath -ldflags "-s -w -buildid= ${COMMIT_FLAG}" .
 
 # Import the binary from build stage
-FROM gcr.io/distroless/static as prd
+FROM gcr.io/distroless/static AS prd
 WORKDIR /home/nonroot
-COPY --from=build /app/nnu-connect /home/nonroot
-ENTRYPOINT ["/home/nonroot/nnu-connect" ,"-config", "/home/nonroot/config.toml"]
+COPY --from=build /app/campusway /home/nonroot
+ENTRYPOINT ["/home/nonroot/campusway", "-config", "/home/nonroot/config.toml"]

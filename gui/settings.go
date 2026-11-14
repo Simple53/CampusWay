@@ -90,13 +90,15 @@ func (s *AppServer) ForgetPassword(id string) error {
 	return errors.New("Profile no longer exists")
 }
 
-// Only an explicitly supplied CampusWay repository is queried. No account or
+const defaultUpdateRepo = "Simple53/CampusWay"
+
+// Only an explicitly supplied or default CampusWay repository is queried. No account or
 // gateway configuration is sent to the update service.
 func (s *AppServer) CheckVersion(repository string) (map[string]string, error) {
-	result := map[string]string{"current": version, "status": "Update source is not configured"}
 	if repository == "" {
-		return result, nil
+		repository = defaultUpdateRepo
 	}
+	result := map[string]string{"current": version, "repository": repository, "status": "Update source is not configured"}
 	if !regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`).MatchString(repository) {
 		return nil, errors.New("Invalid GitHub repository")
 	}

@@ -1,11 +1,14 @@
 name: Validate CampusWay
+
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+
 permissions:
   contents: read
+
 jobs:
   checks:
     runs-on: windows-latest
@@ -26,6 +29,8 @@ jobs:
         run: |
           go run github.com/akavel/rsrc@v0.10.2 -manifest gui/campusway.exe.manifest -ico build/assets/campusway.ico -o gui/rsrc_windows_amd64.syso
           if ($LASTEXITCODE) { throw 'Resource generation failed' }
-          ./build.ps1 -GoBin go
+          ./build.ps1 -GoBin go -WithCLI
           python build/smoke.py
           if ($LASTEXITCODE) { throw 'Worker smoke test failed' }
+          python scripts/build-pages.py
+          if ($LASTEXITCODE) { throw 'Pages build failed' }

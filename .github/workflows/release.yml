@@ -1,0 +1,324 @@
+name: Build Multi-Platform Releases and Publish
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '发布版本号 (如 v0.1.0)'
+        required: true
+        default: 'v0.1.0'
+
+permissions:
+  contents: write
+
+jobs:
+  # ==========================================================
+  # 1. Windows 桌面端 (便携 ZIP + NSIS 安装包) 与 CLI (x64 / arm64)
+  # ==========================================================
+  build-windows:
+    name: Build Windows (Desktop & CLI)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Run Checks and Tests
+        shell: pwsh
+        run: ./scripts/check.ps1 -GoBin go
+
+      - name: Generate Windows Manifest and Icon Resource
+        shell: pwsh
+        run: |
+          go run github.com/akavel/rsrc@v0.10.2 -manifest gui/campusway.exe.manifest -ico build/assets/campusway.ico -o gui/rsrc_windows_amd64.syso
+          if ($LASTEXITCODE) { throw 'Resource generation failed' }
+
+      - name: Build Windows Desktop, Portable ZIP, and CLI (x64 & arm64)
+        shell: pwsh
+        run: |
+          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ github.event.inputs.version }}" } else { "${{ github.ref_name }}" }
+          $semver = $tag.TrimStart('v')
+          if ($semver -notmatch '^[0-9A-Za-z.-]+$') { throw "Invalid version: $tag" }
+          ./build.ps1 -GoBin go -Version $semver -WithCLI
+          python build/smoke.py
+          if ($LASTEXITCODE) { throw 'Worker smoke test failed' }
+
+          New-Item -ItemType Directory -Force dist/release | Out-Null
+          Copy-Item "dist/campusway/CampusWay-$semver-windows-x64-portable.zip" "dist/release/"
+          Copy-Item "dist/campusway/campusway-cli-$semver-windows-x64.zip" "dist/release/"
+
+          New-Item -ItemType Directory -Force build/staging/win-arm64 | Out-Null
+          $env:GOOS = 'windows'
+          $env:GOARCH = 'arm64'
+          $env:CGO_ENABLED = '0'
+          go build -buildvcs=false -ldflags "-s -w -X 'main.CommitID=$semver'" -o build/staging/win-arm64/campusway-cli.exe .
+          if ($LASTEXITCODE) { throw 'Windows arm64 CLI build failed' }
+          Copy-Item LICENSE build/staging/win-arm64/LICENSE
+          Compress-Archive -Force -Path build/staging/win-arm64/campusway-cli.exe, build/staging/win-arm64/LICENSE -DestinationPath "dist/release/campusway-cli-$semver-windows-arm64.zip"
+
+      - name: Build Windows Installer (NSIS)
+        shell: pwsh
+        run: |
+          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch") { "${{ github.event.inputs.version }}" } else { "${{ github.ref_name }}" }
+          $semver = $tag.TrimStart('v')
+          choco install nsis --no-progress -y
+          & 'C:/Program Files (x86)/NSIS/makensis.exe' build/windows.nsi
+          if ($LASTEXITCODE) { throw 'NSIS installer build failed' }
+          Move-Item build/CampusWay-Setup.exe "dist/release/CampusWay-$semver-windows-x64-setup.exe"
+
+      - name: Upload Windows Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CampusWay-windows
+          path: dist/release/*
+
+  # ==========================================================
+  # 2. macOS 桌面端 (.dmg) 与 CLI (.tar.gz) - arm64 / x64
+  # ==========================================================
+  build-macos:
+    name: Build macOS (${{ matrix.platform }})
+    strategy:
+      matrix:
+        include:
+          - os: macos-15
+            platform: macos-arm64
+            goarch: arm64
+          - os: macos-15-intel
+            platform: macos-x64
+            goarch: amd64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set Release Version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG_VERSION="${{ github.event.inputs.version }}"
+          else
+            TAG_VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "SEMVER=${TAG_VERSION#v}" >> "$GITHUB_ENV"
+
+      - name: Build macOS Desktop DMG and CLI Archive
+        run: |
+          bash build/package-unix.sh "${{ matrix.platform }}" "${{ env.SEMVER }}"
+          mkdir -p build/staging/cli
+          CGO_ENABLED=0 GOOS=darwin GOARCH="${{ matrix.goarch }}" go build -buildvcs=false -ldflags "-s -w -X 'main.CommitID=${{ env.SEMVER }}'" -o build/staging/cli/campusway-cli .
+          cp LICENSE build/staging/cli/LICENSE
+          tar -czf "dist/packages/campusway-cli-${{ env.SEMVER }}-${{ matrix.platform }}.tar.gz" -C build/staging/cli campusway-cli LICENSE
+
+      - name: Upload macOS Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CampusWay-${{ matrix.platform }}
+          path: dist/packages/*
+
+  # ==========================================================
+  # 3. Linux 桌面端 (.deb / .tar.gz) 与 CLI (x64 / arm64)
+  # ==========================================================
+  build-linux:
+    name: Build Linux (Desktop & CLI)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install Linux GTK / WebKit Dependencies
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Set Release Version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG_VERSION="${{ github.event.inputs.version }}"
+          else
+            TAG_VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "SEMVER=${TAG_VERSION#v}" >> "$GITHUB_ENV"
+
+      - name: Build Linux Desktop Packages and CLI (x64 & arm64)
+        run: |
+          bash build/package-unix.sh "linux-x64" "${{ env.SEMVER }}"
+          for arch_pair in "amd64:linux-x64" "arm64:linux-arm64"; do
+            goarch="${arch_pair%%:*}"
+            label="${arch_pair##*:}"
+            stage="build/staging/cli-${label}"
+            mkdir -p "$stage"
+            CGO_ENABLED=0 GOOS=linux GOARCH="$goarch" go build -buildvcs=false -ldflags "-s -w -X 'main.CommitID=${{ env.SEMVER }}'" -o "$stage/campusway-cli" .
+            cp LICENSE "$stage/LICENSE"
+            tar -czf "dist/packages/campusway-cli-${{ env.SEMVER }}-${label}.tar.gz" -C "$stage" campusway-cli LICENSE
+          done
+
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CampusWay-linux
+          path: dist/packages/*
+
+  # ==========================================================
+  # 4. Android 核心绑定库 (.aar)
+  # ==========================================================
+  build-android:
+    name: Build Android Core (AAR)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Set Release Version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG_VERSION="${{ github.event.inputs.version }}"
+          else
+            TAG_VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "SEMVER=${TAG_VERSION#v}" >> "$GITHUB_ENV"
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Build Android AAR with gomobile
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends g++ libc6-dev wget unzip zip
+          go get golang.org/x/mobile/bind@latest
+          go install golang.org/x/mobile/cmd/gomobile@latest
+          export PATH="$(go env GOPATH)/bin:${PATH}"
+
+          export NDK_LTS_VERSION=23.2.8568313
+          export SDK_TOOLS_VERSION=10406996
+          export ANDROID_PLATFORM_VERSION=24
+          export ANDROID_HOME="/home/runner/android-sdk"
+          export ANDROID_SDK_ROOT="$ANDROID_HOME"
+          export CMDLINE_TOOLS_ROOT="${ANDROID_HOME}/cmdline-tools/latest/bin"
+          export ANDROID_NDK_HOME="${ANDROID_HOME}/ndk/${NDK_LTS_VERSION}"
+          export ANDROID_NDK_ROOT="${ANDROID_NDK_HOME}"
+          export PATH="${ANDROID_HOME}/cmdline-tools/latest/bin:${ANDROID_HOME}/platform-tools:${PATH}"
+
+          mkdir -p "${ANDROID_HOME}/cmdline-tools" "${ANDROID_HOME}/platforms" "${ANDROID_HOME}/ndk"
+          wget -O /tmp/cmdline-tools.zip -t 5 --no-verbose "https://dl.google.com/android/repository/commandlinetools-linux-${SDK_TOOLS_VERSION}_latest.zip"
+          unzip -q /tmp/cmdline-tools.zip -d "${ANDROID_HOME}/cmdline-tools"
+          rm -f /tmp/cmdline-tools.zip
+          mv "${ANDROID_HOME}/cmdline-tools/cmdline-tools" "${ANDROID_HOME}/cmdline-tools/latest"
+
+          echo y | "${CMDLINE_TOOLS_ROOT}/sdkmanager" "build-tools;${ANDROID_PLATFORM_VERSION}.0.0"
+          echo y | "${CMDLINE_TOOLS_ROOT}/sdkmanager" "platforms;android-${ANDROID_PLATFORM_VERSION}"
+          echo y | "${CMDLINE_TOOLS_ROOT}/sdkmanager" "ndk;${NDK_LTS_VERSION}"
+
+          mkdir -p build_assets
+          gomobile init
+          gomobile bind -target=android -androidapi "${ANDROID_PLATFORM_VERSION}" -o build_assets/campusway.aar ./mobile
+          cp LICENSE build_assets/LICENSE
+          (cd build_assets && zip -9r "../CampusWay-${{ env.SEMVER }}-android-aar.zip" .)
+
+      - name: Upload Android Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: CampusWay-android-aar
+          path: CampusWay-*-android-aar.zip
+
+  # ==========================================================
+  # 5. 汇总所有平台产物、生成 SHA256SUMS.txt 并发布 GitHub Release
+  # ==========================================================
+  publish-release:
+    name: Publish Multi-Platform Release
+    needs: [build-windows, build-macos, build-linux, build-android]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set Release Version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG_VERSION="${{ github.event.inputs.version }}"
+          else
+            TAG_VERSION="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "RELEASE_VERSION=${TAG_VERSION}" >> "$GITHUB_ENV"
+          echo "SEMVER=${TAG_VERSION#v}" >> "$GITHUB_ENV"
+
+      - name: Download All Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: CampusWay-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: Generate SHA256 Checksums
+        run: |
+          cd release-assets
+          sha256sum *.zip *.exe *.dmg *.tar.gz *.deb > SHA256SUMS.txt
+          ls -lh
+          cat SHA256SUMS.txt
+
+      - name: Create Multi-Platform GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_VERSION }}
+          name: CampusWay ${{ env.RELEASE_VERSION }} - 全平台客户端与命令行发行版
+          draft: false
+          prerelease: false
+          files: |
+            release-assets/*
+          body: |
+            ## CampusWay ${{ env.RELEASE_VERSION }} 多平台正式版本发布 / Multi-Platform Release
+
+            🌐 **在线交互预览 (Web Preview)**: [https://simple53.github.io/CampusWay/](https://simple53.github.io/CampusWay/)
+
+            ---
+
+            ### 💻 桌面端客户端 / Desktop Applications
+            - **Windows (x64)**:
+              - 安装版 / Installer: **`CampusWay-${{ env.SEMVER }}-windows-x64-setup.exe`** (NSIS 标准安装程序，自动创建开始菜单快捷方式)
+              - 便携版 / Portable: **`CampusWay-${{ env.SEMVER }}-windows-x64-portable.zip`** (解压即用，无需安装)
+            - **macOS (Apple Silicon & Intel)**:
+              - Apple Silicon (M 系列): **`CampusWay-${{ env.SEMVER }}-macos-arm64.dmg`**
+              - Intel Mac: **`CampusWay-${{ env.SEMVER }}-macos-x64.dmg`**
+            - **Linux (x64)**:
+              - Debian / Ubuntu: **`CampusWay-${{ env.SEMVER }}-linux-x64.deb`**
+              - 通用压缩包 / Tarball: **`CampusWay-${{ env.SEMVER }}-linux-x64.tar.gz`**
+
+            ### ⌨️ 命令行客户端 / Command-Line Tools (CLI)
+            适用于无界面服务器、Docker 容器、OpenWrt 路由器与自动化脚本场景：
+            - Windows: `campusway-cli-${{ env.SEMVER }}-windows-x64.zip`, `campusway-cli-${{ env.SEMVER }}-windows-arm64.zip`
+            - macOS: `campusway-cli-${{ env.SEMVER }}-macos-arm64.tar.gz`, `campusway-cli-${{ env.SEMVER }}-macos-x64.tar.gz`
+            - Linux: `campusway-cli-${{ env.SEMVER }}-linux-x64.tar.gz`, `campusway-cli-${{ env.SEMVER }}-linux-arm64.tar.gz`
+
+            ### 📱 移动端核心库 / Mobile Core Binding
+            - Android AAR: **`CampusWay-${{ env.SEMVER }}-android-aar.zip`** (`gomobile` 编译产物，用于原生 Android VpnService 集成)
+
+            > ⚠️ 桌面安装包当前未进行商业代码签名，Windows SmartScreen 或 macOS Gatekeeper 首次启动时可能需要手动确认信任。完整校验值请查阅附件 `SHA256SUMS.txt`。
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

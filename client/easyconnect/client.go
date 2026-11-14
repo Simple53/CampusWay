@@ -17,7 +17,7 @@ import (
 )
 
 type Client struct {
-	server            string // Example: rvpn.zju.edu.cn:443. No protocol prefix
+	server            string // Example: vpn.example.edu.cn:443. No protocol prefix
 	username          string
 	password          string
 	totpSecret        string

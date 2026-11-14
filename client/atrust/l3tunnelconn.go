@@ -498,8 +498,8 @@ func buildAuthRequest(info clientInfo, signKey []byte, meta packetMeta, ct *conn
 }
 
 func defaultEnv(info clientInfo) *trustEnv {
-	procPath := "/usr/bin/zju-connect"
-	procName := "zju-connect"
+	procPath := "/usr/bin/campusway"
+	procName := "campusway"
 	fingerprint := fmt.Sprintf("%X", sha256.Sum256([]byte(procPath)))
 	platform := strings.Title(runtime.GOOS)
 	if platform == "Darwin" {
@@ -895,7 +895,7 @@ func authIPType(atype int) int {
 
 func langFromEnv(_ string) string {
 	lang := firstNonEmpty(
-		os.Getenv("ZJU_CONNECT_LANG"),
+		os.Getenv("CAMPUSWAY_LANG"),
 		os.Getenv("LC_ALL"),
 		os.Getenv("LC_MESSAGES"),
 		os.Getenv("LANG"),

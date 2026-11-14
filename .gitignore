@@ -23,11 +23,13 @@ go.work
 
 # Config file
 config.toml
+.tools/
 .gocache/
 node_modules/
 dist/
 build/staging/
 *.syso
+gui/*.syso
 
 __pycache__/
 *.pyc

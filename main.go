@@ -21,9 +21,9 @@ func main() {
 	log.Init()
 
 	if CommitID != "" {
-		log.Println("Start NNU Connect v" + nnuConnectVersion + "-" + CommitID)
+		log.Println("Start CampusWay CLI v" + campusWayVersion + "-" + CommitID)
 	} else {
-		log.Println("Start NNU Connect v" + nnuConnectVersion)
+		log.Println("Start CampusWay CLI v" + campusWayVersion)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -49,6 +49,6 @@ func main() {
 	})
 
 	if err != nil {
-		log.Fatalf("NNU-Connect execution failed: %v", err)
+		log.Fatalf("CampusWay execution failed: %v", err)
 	}
 }

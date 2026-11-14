@@ -18,7 +18,7 @@ import (
 
 var CommitID string
 
-const nnuConnectVersion = "1.0.0"
+const campusWayVersion = "0.1.0"
 
 func getTOMLVal[T int | uint64 | string | bool](valPointer *T, defaultVal T) T {
 	if valPointer == nil {
@@ -28,23 +28,16 @@ func getTOMLVal[T int | uint64 | string | bool](valPointer *T, defaultVal T) T {
 	}
 }
 
-func getTOMLAliasVal[T int | uint64 | string | bool](primary, legacy *T, defaultVal T) T {
-	if primary != nil {
-		return *primary
-	}
-	return getTOMLVal(legacy, defaultVal)
-}
-
 func parseTOMLConfig(configFile string, conf *configs.Config) error {
 	var confTOML configs.ConfigTOML
 
 	_, err := toml.DecodeFile(configFile, &confTOML)
 	if err != nil {
-		return errors.New("NNU Connect: error parsing the config file: " + err.Error())
+		return errors.New("CampusWay: error parsing the config file: " + err.Error())
 	}
 
 	conf.Protocol = getTOMLVal(confTOML.Protocol, "easyconnect")
-	conf.ServerAddress = getTOMLVal(confTOML.ServerAddress, "vpn.njnu.edu.cn")
+	conf.ServerAddress = getTOMLVal(confTOML.ServerAddress, "")
 	conf.ServerPort = getTOMLVal(confTOML.ServerPort, 443)
 	conf.Username = getTOMLVal(confTOML.Username, "")
 	conf.Password = getTOMLVal(confTOML.Password, "")
@@ -53,8 +46,8 @@ func parseTOMLConfig(configFile string, conf *configs.Config) error {
 	conf.CertPassword = getTOMLVal(confTOML.CertPassword, "")
 	conf.DisableServerConfig = getTOMLVal(confTOML.DisableServerConfig, false)
 	conf.SkipDomainResource = getTOMLVal(confTOML.SkipDomainResource, false)
-	conf.DisableZJUConfig = getTOMLAliasVal(confTOML.DisablePresetConfig, confTOML.DisableZJUConfig, false)
-	conf.DisableRemoteDNS = getTOMLAliasVal(confTOML.DisableRemoteDNS, confTOML.DisableZJUDNS, false)
+	conf.DisablePresetConfig = getTOMLVal(confTOML.DisablePresetConfig, false)
+	conf.DisableRemoteDNS = getTOMLVal(confTOML.DisableRemoteDNS, false)
 	conf.DisableMultiLine = getTOMLVal(confTOML.DisableMultiLine, false)
 	conf.ProxyAll = getTOMLVal(confTOML.ProxyAll, false)
 	conf.SocksBind = getTOMLVal(confTOML.SocksBind, "127.0.0.1:1080")
@@ -70,7 +63,7 @@ func parseTOMLConfig(configFile string, conf *configs.Config) error {
 	conf.DebugDump = getTOMLVal(confTOML.DebugDump, false)
 	conf.DisableKeepAlive = getTOMLVal(confTOML.DisableKeepAlive, false)
 	conf.KeepAliveURL = getTOMLVal(confTOML.KeepAliveURL, "")
-	conf.RemoteDNSServer = getTOMLAliasVal(confTOML.RemoteDNSServer, confTOML.ZJUDNSServer, "auto")
+	conf.RemoteDNSServer = getTOMLVal(confTOML.RemoteDNSServer, "auto")
 	conf.SecondaryDNSServer = getTOMLVal(confTOML.SecondaryDNSServer, "114.114.114.114")
 	conf.DNSServerBind = getTOMLVal(confTOML.DNSServerBind, "")
 	conf.DNSHijack = getTOMLVal(confTOML.DNSHijack, false)
@@ -93,15 +86,15 @@ func parseTOMLConfig(configFile string, conf *configs.Config) error {
 
 	for _, singlePortForwarding := range confTOML.PortForwarding {
 		if singlePortForwarding.NetworkType == nil {
-			return errors.New("NNU Connect: network type is not set")
+			return errors.New("CampusWay: network type is not set")
 		}
 
 		if singlePortForwarding.BindAddress == nil {
-			return errors.New("NNU Connect: bind address is not set")
+			return errors.New("CampusWay: bind address is not set")
 		}
 
 		if singlePortForwarding.RemoteAddress == nil {
-			return errors.New("NNU Connect: remote address is not set")
+			return errors.New("CampusWay: remote address is not set")
 		}
 
 		conf.PortForwardingList = append(conf.PortForwardingList, configs.SinglePortForwarding{
@@ -113,11 +106,11 @@ func parseTOMLConfig(configFile string, conf *configs.Config) error {
 
 	for _, singleCustomDns := range confTOML.CustomDNS {
 		if singleCustomDns.HostName == nil {
-			return errors.New("NNU Connect: host name is not set")
+			return errors.New("CampusWay: host name is not set")
 		}
 
 		if singleCustomDns.IP == nil {
-			return errors.New("NNU Connect: IP is not set")
+			return errors.New("CampusWay: IP is not set")
 		}
 
 		conf.CustomDNSList = append(conf.CustomDNSList, configs.SingleCustomDNS{
@@ -129,7 +122,7 @@ func parseTOMLConfig(configFile string, conf *configs.Config) error {
 	for _, singleCustomProxyDomain := range confTOML.CustomProxyDomain {
 		var domainRegex = regexp.MustCompile(`^[a-zA-Z\d-]+(\.[a-zA-Z\d-]+)*\.[a-zA-Z]{2,}$`)
 		if !domainRegex.MatchString(singleCustomProxyDomain) {
-			return fmt.Errorf("NNU Connect: %s is not a valid domain", singleCustomProxyDomain)
+			return fmt.Errorf("CampusWay: %s is not a valid domain", singleCustomProxyDomain)
 		}
 		conf.CustomProxyDomain = append(conf.CustomProxyDomain, singleCustomProxyDomain)
 	}
@@ -145,7 +138,7 @@ func init() {
 	atrustUntrustDevice := false
 
 	flag.StringVar(&conf.Protocol, "protocol", "easyconnect", "Protocol (easyconnect, atrust)")
-	flag.StringVar(&conf.ServerAddress, "server", "vpn.njnu.edu.cn", "EasyConnect/aTrust server address")
+	flag.StringVar(&conf.ServerAddress, "server", "", "EasyConnect/aTrust gateway server address (e.g. vpn.example.edu.cn)")
 	flag.IntVar(&conf.ServerPort, "port", 443, "EasyConnect/aTrust port address")
 	flag.StringVar(&conf.Username, "username", "", "Your unified authentication username/student ID")
 	flag.StringVar(&conf.Password, "password", "", "Your password")
@@ -154,10 +147,8 @@ func init() {
 	flag.StringVar(&conf.CertPassword, "cert-password", "", "Client certificate password")
 	flag.BoolVar(&conf.DisableServerConfig, "disable-server-config", false, "Don't parse server config")
 	flag.BoolVar(&conf.SkipDomainResource, "skip-domain-resource", false, "Don't use server-provided domain resources")
-	flag.BoolVar(&conf.DisableZJUConfig, "disable-preset-config", false, "Don't use NJNU preset config (domains and subnets)")
-	flag.BoolVar(&conf.DisableZJUConfig, "disable-zju-config", false, "Alias for disable-preset-config")
+	flag.BoolVar(&conf.DisablePresetConfig, "disable-preset-config", false, "Disable automatic gateway parent-domain routing preset")
 	flag.BoolVar(&conf.DisableRemoteDNS, "disable-remote-dns", false, "Use local DNS instead of remote DNS")
-	flag.BoolVar(&conf.DisableRemoteDNS, "disable-zju-dns", false, "Alias for disable-remote-dns")
 	flag.BoolVar(&conf.DisableMultiLine, "disable-multi-line", false, "Disable multi line auto select")
 	flag.BoolVar(&conf.ProxyAll, "proxy-all", false, "Proxy all IPv4 traffic")
 	flag.StringVar(&conf.SocksBind, "socks-bind", "127.0.0.1:1080", "The address SOCKS5 server listens on")
@@ -172,12 +163,11 @@ func init() {
 	flag.Uint64Var(&conf.DNSTTL, "dns-ttl", 3600, "DNS record time to live, unit is second")
 	flag.BoolVar(&conf.DebugDump, "debug-dump", false, "Enable traffic debug dump (only for debug usage)")
 	flag.BoolVar(&conf.DisableKeepAlive, "disable-keep-alive", false, "Disable keep alive")
-	flag.StringVar(&conf.KeepAliveURL, "keep-alive-url", "https://vpn.njnu.edu.cn", "Keep alive URL")
+	flag.StringVar(&conf.KeepAliveURL, "keep-alive-url", "", "Keep alive URL (defaults to https://<server>)")
 	flag.StringVar(&conf.RemoteDNSServer, "remote-dns-server", "auto", "Remote DNS server address. Set to 'auto' to use remote DNS server provided by server")
-	flag.StringVar(&conf.RemoteDNSServer, "zju-dns-server", "auto", "Alias for remote-dns-server")
 	flag.StringVar(&conf.SecondaryDNSServer, "secondary-dns-server", "114.114.114.114", "Secondary DNS server address. Leave empty to use system default DNS server")
 	flag.StringVar(&conf.DNSServerBind, "dns-server-bind", "", "The address DNS server listens on (e.g. 127.0.0.1:53)")
-	flag.BoolVar(&conf.DNSHijack, "dns-hijack", false, "Hijack all dns query to NNU Connect")
+	flag.BoolVar(&conf.DNSHijack, "dns-hijack", false, "Hijack all DNS queries to CampusWay")
 	flag.BoolVar(&conf.FakeIP, "fake-ip", false, "Enable Fake IP for DNS hijack")
 	flag.StringVar(&conf.GraphCodeFile, "graph-code-file", "", "Graph Check Code File")
 	flag.StringVar(&conf.BindInterface, "bind-interface", "", "Bind VPN underlay connections to this network interface")
@@ -197,8 +187,8 @@ func init() {
 	flag.BoolVar(&conf.SkipTCPTunnelWait, "skip-tcp-tunnel-wait", false, "Don't wait for aTrust TCP tunnel connection status")
 	flag.StringVar(&tcpPortForwarding, "tcp-port-forwarding", "", "TCP port forwarding (e.g. 0.0.0.0:9898-10.10.98.98:80)")
 	flag.StringVar(&udpPortForwarding, "udp-port-forwarding", "", "UDP port forwarding (e.g. 127.0.0.1:53-10.10.0.21:53)")
-	flag.StringVar(&customDns, "custom-dns", "", "Custom set dns lookup (e.g. ehallapp.nnu.edu.cn:10.10.1.1)")
-	flag.StringVar(&customProxyDomain, "custom-proxy-domain", "", "Custom set domains which force use VPN proxy (e.g. ehallapp.nnu.edu.cn,zgzj.njnu.edu.cn)")
+	flag.StringVar(&customDns, "custom-dns", "", "Custom set dns lookup (e.g. portal.example.edu.cn:10.10.1.1)")
+	flag.StringVar(&customProxyDomain, "custom-proxy-domain", "", "Custom set domains which force use VPN proxy (e.g. portal.example.edu.cn,lib.example.edu.cn)")
 	flag.StringVar(&configFile, "config", "", "Config file path")
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.BoolVar(&atrustAuthInfo, "auth-info", false, "Fetch aTrust authentication information, but not login")
@@ -208,7 +198,7 @@ func init() {
 	flag.Parse()
 
 	if showVersion {
-		fmt.Printf("NNU Connect v%s\n", nnuConnectVersion)
+		fmt.Printf("CampusWay CLI v%s\n", campusWayVersion)
 		os.Exit(0)
 	}
 
@@ -272,7 +262,7 @@ func init() {
 			for _, forwardingString := range forwardingStringList {
 				addressStringList := strings.Split(forwardingString, "-")
 				if len(addressStringList) != 2 {
-					fmt.Fprintln(os.Stderr, "NNU Connect: wrong tcp port forwarding format")
+					fmt.Fprintln(os.Stderr, "CampusWay: wrong tcp port forwarding format")
 					os.Exit(1)
 				}
 
@@ -289,7 +279,7 @@ func init() {
 			for _, forwardingString := range forwardingStringList {
 				addressStringList := strings.Split(forwardingString, "-")
 				if len(addressStringList) != 2 {
-					fmt.Fprintln(os.Stderr, "NNU Connect: wrong udp port forwarding format")
+					fmt.Fprintln(os.Stderr, "CampusWay: wrong udp port forwarding format")
 					os.Exit(1)
 				}
 
@@ -306,7 +296,7 @@ func init() {
 			for _, dnsString := range dnsList {
 				dnsStringSplit := strings.Split(dnsString, ":")
 				if len(dnsStringSplit) != 2 {
-					fmt.Fprintln(os.Stderr, "NNU Connect: wrong custom dns format")
+					fmt.Fprintln(os.Stderr, "CampusWay: wrong custom dns format")
 					os.Exit(1)
 				}
 
@@ -322,14 +312,16 @@ func init() {
 			for _, domain := range domainList {
 				var domainRegex = regexp.MustCompile(`^[a-zA-Z\d-]+(\.[a-zA-Z\d-]+)*\.[a-zA-Z]{2,}$`)
 				if !domainRegex.MatchString(domain) {
-					fmt.Fprintf(os.Stderr, "NNU Connect: %s is not a valid domain\n", domain)
+					fmt.Fprintf(os.Stderr, "CampusWay: %s is not a valid domain\n", domain)
 					os.Exit(1)
 				}
 				conf.CustomProxyDomain = append(conf.CustomProxyDomain, domain)
 			}
 		}
 	}
-	if password, ok := os.LookupEnv("NNU_CONNECT_PASSWORD"); ok {
+	if password, ok := os.LookupEnv("CAMPUSWAY_PASSWORD"); ok {
+		conf.Password = password
+	} else if password, ok := os.LookupEnv("NNU_CONNECT_PASSWORD"); ok {
 		conf.Password = password
 	}
 
@@ -349,8 +341,8 @@ func init() {
 		}
 	}
 	if missing {
-		fmt.Println("NNU Connect: missing required arguments")
-		fmt.Println("Please see: https://github.com/nnu-connect/nnu-connect")
+		fmt.Println("CampusWay: missing required arguments")
+		fmt.Println("Please see: https://github.com/Simple53/CampusWay")
 		fmt.Println("\nUsage:")
 		flag.PrintDefaults()
 

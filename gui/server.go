@@ -17,8 +17,7 @@ import (
 	"time"
 )
 
-// Connection options mirror the protocol, DNS and local-proxy groups in
-// https://github.com/chenx-dust/EZ4Connect and Mythologyli/ZJU-Connect-for-Windows.
+// Connection options group protocol, DNS and local-proxy settings per route.
 type ConnectionOptions struct {
 	AuthType            string `json:"authType"`
 	LoginDomain         string `json:"loginDomain"`
