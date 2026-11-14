@@ -95,6 +95,7 @@ jobs:
   build-macos:
     name: Build macOS (${{ matrix.platform }})
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: macos-15

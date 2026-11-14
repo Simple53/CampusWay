@@ -8,10 +8,11 @@ if [[ "${GITHUB_REF_TYPE:-}" == tag ]]; then version="${GITHUB_REF_NAME#v}"; fi
 short_version="${version%%-*}"
 mkdir -p dist/packages build/staging
 if [[ "$platform" == macos-* ]]; then
-  app="build/staging/CampusWay.app"
-  rm -rf "$app"
+  dmg_dir="build/staging/dmg"
+  app="$dmg_dir/CampusWay.app"
+  rm -rf "$dmg_dir"
   mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-  go build -buildvcs=false -tags desktop,production -ldflags "-s -w -X main.version=$version" -o "$app/Contents/MacOS/CampusWay" ./gui
+  CGO_ENABLED=1 CGO_LDFLAGS="-framework UniformTypeIdentifiers" go build -buildvcs=false -tags desktop,production -ldflags "-s -w -X main.version=$version" -o "$app/Contents/MacOS/CampusWay" ./gui
   cp build/assets/campusway.icns "$app/Contents/Resources/"
   cp LICENSE "$app/Contents/Resources/LICENSE"
   cp gui/static/icons/LICENSE "$app/Contents/Resources/ICON-LICENSE"
@@ -23,12 +24,21 @@ if [[ "$platform" == macos-* ]]; then
 <key>CFBundleName</key><string>CampusWay</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>CFBundleShortVersionString</key><string>$short_version</string>
+<key>CFBundleVersion</key><string>$short_version</string>
 <key>CFBundleIconFile</key><string>campusway</string>
 <key>NSHighResolutionCapable</key><true/>
 </dict></plist>
 EOF
   codesign --force --deep --sign - "$app"
-  hdiutil create -volname CampusWay -srcfolder "$app" -ov -format UDZO "dist/packages/CampusWay-$version-$platform.dmg"
+  dmg="dist/packages/CampusWay-$version-$platform.dmg"
+  for attempt in 1 2 3 4 5; do
+    rm -f "$dmg"
+    if hdiutil create -volname CampusWay -srcfolder "$dmg_dir" -fs HFS+ -ov -format UDZO "$dmg"; then
+      break
+    fi
+    sleep 3
+  done
+  [[ -f "$dmg" ]]
 else
   root="build/staging/linux"
   rm -rf "$root"
