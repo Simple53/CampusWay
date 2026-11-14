@@ -77,7 +77,8 @@ func TestPreferencesAndBoundedLogCursor(t *testing.T) {
 	if err := s.SavePreferences(p); err != nil {
 		t.Fatal(err)
 	}
-	if newAppAt(s.dir).GetSnapshot().Preferences != p {
+	got := newAppAt(s.dir).GetSnapshot().Preferences
+	if got.Accent != p.Accent || got.Language != p.Language || got.Theme != p.Theme || got.View != p.View || got.Density != p.Density || got.Sort != p.Sort {
 		t.Fatal("preferences lost")
 	}
 	for i := 0; i < 510; i++ {

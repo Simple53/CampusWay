@@ -1,14 +1,113 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"regexp"
 	"strings"
 	"time"
 )
+
+type DiagnosticTarget struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+	OK   bool   `json:"ok"`
+	MS   int64  `json:"ms"`
+	Err  string `json:"err,omitempty"`
+}
+
+type DiagnosticReport struct {
+	Targets []DiagnosticTarget `json:"targets"`
+	LocalIP string             `json:"localIP"`
+	DNS     string             `json:"dns"`
+}
+
+// RunDiagnostics tests connectivity to selected campus & internet targets through the active local proxy.
+func (s *AppServer) RunDiagnostics() (DiagnosticReport, error) {
+	s.mu.Lock()
+	p := s.config.Preferences
+	var activeProf *Profile
+	for _, prof := range s.config.Profiles {
+		if prof.ID == s.active {
+			cp := prof
+			activeProf = &cp
+			break
+		}
+	}
+	s.mu.Unlock()
+
+	httpPort := 1081
+	if activeProf != nil && activeProf.Options.HTTPPort > 0 {
+		httpPort = activeProf.Options.HTTPPort
+	}
+
+	proxyURL, _ := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", httpPort))
+	transport := &http.Transport{
+		Proxy: http.ProxyURL(proxyURL),
+		DialContext: (&net.Dialer{
+			Timeout:   3 * time.Second,
+			KeepAlive: 3 * time.Second,
+		}).DialContext,
+		TLSHandshakeTimeout: 3 * time.Second,
+	}
+	client := &http.Client{
+		Transport: transport,
+		Timeout:   4 * time.Second,
+	}
+
+	defaultTargets := []struct{ name, targetURL string }{
+		{"教务系统 (JWGL)", "http://jwgl.njnu.edu.cn"},
+		{"办事大厅 (E-Hall)", "https://ehallapp.nnu.edu.cn"},
+		{"中国知网 (CNKI)", "https://www.cnki.net"},
+		{"公共网关 (Baidu)", "https://www.baidu.com"},
+	}
+
+	report := DiagnosticReport{
+		Targets: make([]DiagnosticTarget, 0, len(defaultTargets)),
+		DNS:     "127.0.0.1 (VPN DNS / Fallback)",
+	}
+
+	for _, dt := range defaultTargets {
+		start := time.Now()
+		req, err := http.NewRequestWithContext(context.Background(), "GET", dt.targetURL, nil)
+		resItem := DiagnosticTarget{Name: dt.name, URL: dt.targetURL}
+		if err == nil {
+			req.Header.Set("User-Agent", "Mozilla/5.0 CampusWay/1.0")
+			resp, reqErr := client.Do(req)
+			elapsed := time.Since(start).Milliseconds()
+			resItem.MS = elapsed
+			if reqErr == nil {
+				resItem.OK = true
+				_ = resp.Body.Close()
+			} else {
+				resItem.OK = false
+				resItem.Err = reqErr.Error()
+			}
+		} else {
+			resItem.OK = false
+			resItem.Err = err.Error()
+		}
+		report.Targets = append(report.Targets, resItem)
+	}
+
+	// Retrieve local outbound IP
+	conn, err := net.Dial("udp", "8.8.8.8:80")
+	if err == nil {
+		report.LocalIP = conn.LocalAddr().(*net.UDPAddr).IP.String()
+		_ = conn.Close()
+	} else {
+		report.LocalIP = "127.0.0.1"
+	}
+
+	_ = p
+	return report, nil
+}
 
 // Exports deliberately omit usernames and all saved credentials. Imported routes
 // remain drafts until the user supplies an account in the connection editor.

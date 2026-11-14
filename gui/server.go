@@ -47,12 +47,13 @@ type Profile struct {
 	HasPassword   bool              `json:"hasPassword"`
 }
 type Preferences struct {
-	Accent   string `json:"accent"`
-	Language string `json:"language"`
-	Theme    string `json:"theme"`
-	View     string `json:"view"`
-	Density  string `json:"density"`
-	Sort     string `json:"sort"`
+	Accent   string   `json:"accent"`
+	Language string   `json:"language"`
+	Theme    string   `json:"theme"`
+	View     string   `json:"view"`
+	Density  string   `json:"density"`
+	Sort     string   `json:"sort"`
+	Widgets  []string `json:"widgets,omitempty"`
 }
 type storedConfig struct {
 	Version     int         `json:"version"`
@@ -430,6 +431,9 @@ func (s *AppServer) SavePreferences(p Preferences) error {
 	}
 	if !oneOf(p.Theme, "system", "light", "dark") || !oneOf(p.View, "table", "grid") || !oneOf(p.Density, "comfortable", "standard", "compact", "ultra-compact") || !oneOf(p.Sort, "default", "name") {
 		return errors.New("Invalid display preferences")
+	}
+	if len(p.Widgets) == 0 {
+		p.Widgets = []string{"status", "speed", "diag", "logs"}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
