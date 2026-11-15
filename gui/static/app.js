@@ -2,7 +2,7 @@ import {applyAppearance} from './core/themes.js';
 import {call} from './core/bridge.js';
 import {setLanguage,t,message} from './core/i18n.js';
 import {store,selected,active,primary} from './core/store.js';
-import {esc,icon,field,button,download} from './core/ui.js';
+import {esc,icon,field,button,download,toggleSwitch} from './core/ui.js';
 import {home,updateHome} from './pages/home.js';
 import {connections,routes} from './pages/connections.js';
 import {editor,syncProtocol,readProfile} from './pages/editor.js';
