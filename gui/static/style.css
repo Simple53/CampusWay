@@ -59,6 +59,48 @@
 .console-text{word-break:break-all;color:var(--ink)}
 .console-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:12px}
 
+/* Topbar route badge & Add button */
+.current-route-badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:3px 10px;color:var(--ink)}
+.route-hint-text{color:var(--muted);font-size:11px}
+.add-btn{width:36px;height:36px;min-height:36px;padding:8px;border-radius:8px}
+
+/* Compact Speed with Background Lineplot */
+.speed-content-wrap{position:relative;min-height:76px;border-radius:6px;overflow:hidden;margin-top:6px;display:flex;align-items:center}
+.speed-lineplot-bg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:0}
+.speed-values-compact{position:relative;z-index:1;display:grid;grid-template-columns:1fr 1fr;gap:20px;width:100%;padding:4px 6px}
+.speed-metric{display:flex;flex-direction:column;gap:2px}
+.speed-label{font-size:11.5px;color:var(--muted);display:inline-flex;align-items:center;gap:4px}
+.speed-label .icon{width:13px;height:13px}
+.speed-rate{font-size:22px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.2}
+.speed-total{font-size:11px;color:var(--muted)}
+.speed-duration{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);background:var(--surface);padding:2px 8px;border-radius:10px;border:1px solid var(--line)}
+
+/* IP & Gateway Consolidated Card */
+.ip-info-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:16px;margin:8px 0}
+.ip-status-headline{font-size:18px;font-weight:600;color:var(--ink);margin-bottom:6px}
+.ip-row{display:flex;align-items:center;gap:6px;font-size:13px}
+.ip-label{color:var(--muted);font-size:12px}
+.ip-val{font-size:14px;font-variant-numeric:tabular-nums}
+.ip-eye-btn{width:24px;height:24px;min-height:24px;padding:2px;border:0;color:var(--muted)}
+.ip-eye-btn:hover{color:var(--ink)}
+.ip-sub{font-size:11.5px;color:var(--muted);margin-top:2px}
+.ip-details-col{display:flex;flex-direction:column;gap:5px;font-size:12px}
+.ip-meta-item{display:flex;justify-content:space-between;border-bottom:1px solid rgba(128,128,128,.08);padding-bottom:3px}
+.ip-meta-item span{color:var(--muted)}
+.ip-info-foot{display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--line);padding-top:8px;margin-top:10px;font-size:11px}
+
+/* Site Latency Card Tiles */
+.site-test-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
+.site-card{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px 6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);cursor:pointer;transition:transform .12s ease,border-color .12s ease,box-shadow .12s ease;text-align:center;min-height:102px}
+.site-card:hover{border-color:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,.04);transform:translateY(-1px)}
+.site-card-icon{display:flex;align-items:center;justify-content:center;height:32px;margin-bottom:6px}
+.site-card-name{font-size:12px;font-weight:550;color:var(--ink);margin-bottom:6px}
+.site-card-divider{width:60%;height:1px;background:var(--line);margin:0 auto 6px}
+.site-card-status{font-size:12px;color:var(--button);font-weight:500}
+.site-card-status.ok{color:#26834a}
+.site-card-status.err{color:#c03e3e}
+@media(max-width:600px){.site-test-grid{grid-template-columns:repeat(2,1fr)}}
+
 /* Interactive Captcha */
 .captcha-box{display:flex;flex-direction:column;align-items:center;gap:8px;margin:10px 0}
 .captcha-preview-wrap{position:relative;display:inline-block;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fff;user-select:none;cursor:crosshair}

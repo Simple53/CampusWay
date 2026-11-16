@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -126,4 +128,74 @@ func (s *AppServer) CheckVersion(repository string) (map[string]string, error) {
 		result["status"] = "You are on the latest release"
 	}
 	return result, nil
+}
+
+// ApplyUpdate 在应用内直接下载最新版本资产包并准备更新
+func (s *AppServer) ApplyUpdate(repository string) (map[string]string, error) {
+	if repository == "" {
+		repository = defaultUpdateRepo
+	}
+	req, _ := http.NewRequest("GET", "https://api.github.com/repos/"+repository+"/releases/latest", nil)
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "CampusWay")
+	client := http.Client{Timeout: 15 * time.Second}
+	response, err := client.Do(req)
+	if err != nil {
+		return nil, errors.New("无法连接到更新服务器")
+	}
+	defer response.Body.Close()
+	if response.StatusCode != 200 {
+		return nil, errors.New("未找到最新发布版本")
+	}
+	var release struct {
+		Tag    string `json:"tag_name"`
+		Assets []struct {
+			Name               string `json:"name"`
+			BrowserDownloadURL string `json:"browser_download_url"`
+			Size               int64  `json:"size"`
+		} `json:"assets"`
+	}
+	if err = json.NewDecoder(io.LimitReader(response.Body, 1024*1024)).Decode(&release); err != nil {
+		return nil, errors.New("解析更新信息失败")
+	}
+	var targetURL, targetName string
+	for _, asset := range release.Assets {
+		lower := strings.ToLower(asset.Name)
+		if strings.HasSuffix(lower, ".zip") && strings.Contains(lower, "windows") {
+			targetURL = asset.BrowserDownloadURL
+			targetName = asset.Name
+			break
+		}
+	}
+	if targetURL == "" && len(release.Assets) > 0 {
+		targetURL = release.Assets[0].BrowserDownloadURL
+		targetName = release.Assets[0].Name
+	}
+	if targetURL == "" {
+		return nil, errors.New("未找到适用的安装包")
+	}
+	dlReq, _ := http.NewRequest("GET", targetURL, nil)
+	dlReq.Header.Set("User-Agent", "CampusWay")
+	dlResp, err := client.Do(dlReq)
+	if err != nil {
+		return nil, errors.New("下载更新包失败")
+	}
+	defer dlResp.Body.Close()
+	tmpDir := os.TempDir()
+	savePath := filepath.Join(tmpDir, targetName)
+	outF, err := os.Create(savePath)
+	if err != nil {
+		return nil, errors.New("创建临时更新文件失败")
+	}
+	if _, err = io.Copy(outF, dlResp.Body); err != nil {
+		outF.Close()
+		return nil, errors.New("保存更新文件失败")
+	}
+	outF.Close()
+	return map[string]string{
+		"version": release.Tag,
+		"file":    savePath,
+		"name":    targetName,
+		"status":  "ready",
+	}, nil
 }

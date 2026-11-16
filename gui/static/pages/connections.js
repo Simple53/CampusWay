@@ -21,7 +21,10 @@ function editIcon(p){
 
 export function connections(){
 	const s=store.snapshot;
-	return `<div class="page-heading"><h1>${t('connections')}</h1>${button('add','add','primary')}</div>${!s.profiles.length?`<div class="empty">${icon('server')}<h2>${t('emptyTitle')}</h2><p>${t('emptyBody')}</p></div>`:`<div class="list-toolbar"><label class="search">${icon('search')}<input id="search" type="search" value="${esc(store.query)}" placeholder="${t('search')}" aria-label="${t('search')}"></label><div class="segmented">${['grid','table'].map(v=>button(v,'view-'+v,s.preferences.view===v?'chosen':'',`aria-pressed="${s.preferences.view===v}"`)).join('')}</div></div><div id="route-list">${routes()}</div>`}`;
+	return `<div class="page-heading">
+		<h1>${t('connections')}</h1>
+		<button type="button" class="icon-btn primary add-btn" data-action="add" aria-label="${t('add')}" title="${t('add')}">${icon('plus')}</button>
+	</div>${!s.profiles.length?`<div class="empty">${icon('server')}<h2>${t('emptyTitle')}</h2><p>${t('emptyBody')}</p></div>`:`<div class="list-toolbar"><label class="search">${icon('search')}<input id="search" type="search" value="${esc(store.query)}" placeholder="${t('search')}" aria-label="${t('search')}"></label><div class="segmented">${['grid','table'].map(v=>button(v,'view-'+v,s.preferences.view===v?'chosen':'',`aria-pressed="${s.preferences.view===v}"`)).join('')}</div></div><div id="route-list">${routes()}</div>`}`;
 }
 
 export function routes(){

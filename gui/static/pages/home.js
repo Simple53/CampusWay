@@ -53,17 +53,15 @@ export function home() {
 			const currentSize = widgetSizes[w] || defaultSize;
 			const isFull = currentSize === 'full';
 
-			// 编辑模式下工具条：支持上移、下移、隐藏组件（删除按键放大，统一使用拖拽缩放）
+			// 彻底移除箭头按钮，实现完全自由拖拽与手柄缩放
 			const tools = store.homeEdit ? `
 				<div class="widget-tools">
-					${iconButton('arrow-up', 'move-widget-up', 'moveUp', `data-widget="${w}" ${isFirst ? 'disabled' : ''}`)}
-					${iconButton('arrow-down', 'move-widget-down', 'moveDown', `data-widget="${w}" ${isLast ? 'disabled' : ''}`)}
 					${iconButton('eye-off', 'hide-widget', 'hideWidget', `data-widget="${w}"`)}
 				</div>
 			` : '';
 
 			return `
-				<div class="widget-shell size-${currentSize} ${store.homeEdit ? 'editing' : ''}" draggable="${store.homeEdit ? 'true' : 'false'}" data-widget="${w}">
+				<div class="widget-shell size-${currentSize} ${store.homeEdit ? 'editing' : ''}" draggable="true" data-widget="${w}">
 					${tools}
 					<div id="${id}">${renderedModules[id]}</div>
 					<div class="widget-resize-handle" data-resize-widget="${w}" title="${t('dragToResize')}" role="separator" aria-orientation="horizontal">

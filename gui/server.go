@@ -525,6 +525,40 @@ func (s *AppServer) GetSnapshot() Snapshot {
 	}
 	return Snapshot{Traffic: trafficCopy, Profiles: append([]Profile{}, s.config.Profiles...), Preferences: s.config.Preferences, Selected: s.config.Selected, Active: s.active, State: s.state, Message: msg, ConnectedAt: s.connectedAt, Challenge: s.challenge, Logs: append([]LogEntry{}, s.logs...), CanRemember: canRemember()}
 }
+func (s *AppServer) dailyLogPath() string {
+	dir := filepath.Join(s.dir, "logs")
+	_ = os.MkdirAll(dir, 0755)
+	return filepath.Join(dir, time.Now().Format("2006-01-02")+".log")
+}
+
+func (s *AppServer) writeDailyLog(msg string) {
+	path := s.dailyLogPath()
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = f.WriteString(fmt.Sprintf("%s %s\n", time.Now().Format(time.RFC3339), msg))
+}
+
+func (s *AppServer) ExportDailyLogs() (string, error) {
+	path := s.dailyLogPath()
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "今日暂无本地日志记录", nil
+		}
+		return "", err
+	}
+	return string(content), nil
+}
+
+func (s *AppServer) OpenLogsFolder() error {
+	dir := filepath.Join(s.dir, "logs")
+	_ = os.MkdirAll(dir, 0755)
+	return exec.Command("explorer.exe", dir).Start()
+}
+
 func (s *AppServer) record(state, message string) {
 	s.state = state
 	s.message = message
@@ -533,6 +567,7 @@ func (s *AppServer) record(state, message string) {
 	if len(s.logs) > 500 {
 		s.logs = s.logs[len(s.logs)-500:]
 	}
+	s.writeDailyLog(message)
 }
 // rememberPassword stores the credential with DPAPI, reads it back to prove the
 // round trip works, and only then flips the profile flags on disk.
@@ -568,6 +603,7 @@ func (s *AppServer) warn(message string) {
 	if len(s.logs) > 500 {
 		s.logs = s.logs[len(s.logs)-500:]
 	}
+	s.writeDailyLog(message)
 }
 
 func (s *AppServer) Connect(id, password string, remember bool) error {
@@ -658,6 +694,7 @@ func (s *AppServer) Connect(id, password string, remember bool) error {
 	s.challenge = nil
 	s.connectedAt = 0
 	s.traffic = nil
+	s.logs = nil
 	s.record("connecting", fmt.Sprintf("正在连接网关: %s (%s, 协议: %s)", p.Name, p.Server, p.Protocol))
 	s.mu.Unlock()
 	go s.readChild(cmd, out, done)

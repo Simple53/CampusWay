@@ -118,14 +118,19 @@ export function settings(section='',result=null){
 	if(section==='about') content = `
 		<div class="about-brand">CampusWay<span>${t('version')} · ${esc(result?.current||'0.1.2')}</span></div>
 		<p class="section-description">${t('releaseSource')}</p>
-		${button('check','check')}
-		<p role="status">${result?esc(message(result.status)+(result.latest?' ('+result.latest+')':'')):''}</p>`;
+		<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+			${button('check','check')}
+			${result?.latest && result?.status==='A different release is available' ? button('updateNow','apply-update','primary') : ''}
+		</div>
+		<p role="status" style="margin-top:12px;">${result?esc(message(result.status)+(result.latest?' ('+result.latest+')':'')):''}</p>`;
 
 	if(section==='diagnostics') content = `
 		<p class="section-description">${t('logsHint')}</p>
 		<div class="diagnostic-toolbar">
 			${button('copy','copy-logs')}
 			${button('download','export-logs')}
+			${button('exportDailyLogs','export-daily-logs','primary')}
+			${button('openLogsFolder','open-logs-folder')}
 		</div>
 		${s.logs.length?`<ol class="event-list" style="font-family:var(--font-mono, 'Consolas', monospace);font-size:12px;">${s.logs.slice().reverse().map(l=>`<li><time style="flex-shrink:0;">${clock(l.time)}</time><span style="word-break:break-all;user-select:text;">${esc(message(l.message))}</span></li>`).join('')}</ol>`:`<div class="empty">${t('noLogs')}</div>`}`;
 

@@ -16,11 +16,9 @@ function render(){const scroll=document.querySelector('#main')?.scrollTop||0;con
  const activeRoute = active() || selected();
  const isRunning = s.state === 'connected';
  app.innerHTML=`<header class="topbar">
-   <div style="display:flex;align-items:center;gap:12px;">
-     <a class="brand" href="#home">${icon('route')}CampusWay</a>
-     ${activeRoute ? `<span class="header-route-name">${esc(activeRoute.name)}</span>` : ''}
-   </div>
-   <div style="display:flex;align-items:center;gap:12px;">
+   <div class="topbar-left"></div>
+   <div class="topbar-right" style="display:flex;align-items:center;gap:12px;margin-left:auto;">
+     ${activeRoute ? `<span class="current-route-badge"><span class="route-hint-text">${t('currentRoute')}:</span> <strong>${esc(activeRoute.name)}</strong></span>` : ''}
      ${activeRoute ? toggleSwitch(isRunning, 'toggle-global', `title="${t(isRunning?'disconnect':'connect')}"`) : ''}
    </div>
  </header>
@@ -254,7 +252,12 @@ if(a==='add-widget'){
 	if(!cur.includes(w)){cur.push(w);return task(()=>call('SavePreferences',{...store.snapshot.preferences,widgets:cur}));}
 	return;
 }
-if(target.dataset.select)return chooseRoute(target.dataset.select);if(a==='edit-route')return edit(store.snapshot.profiles.find(p=>p.id===target.dataset.id));if(a==='add')return edit();if(a==='edit')return edit(selected());if(a==='edit-account')return edit(store.snapshot.profiles.find(p=>p.id===target.dataset.id));if(a==='goto-connections')return go('connections');if(a==='connect')return start(active()||selected());if(a==='close')return modal.close();if(a==='cancel-challenge')return task(async()=>{await call('Disconnect');modal.close();});if(a?.startsWith('view-'))return task(()=>call('SavePreferences',{...store.snapshot.preferences,view:a.slice(5)}));if(a==='delete')return confirmAction('removeConfirm',async()=>{await call('DeleteProfile',editorProfile.id);editorProfile=null;go('connections');});if(a==='forget')return confirmAction('forget',()=>call('ForgetPassword',target.dataset.id));if(a==='export')return task(async()=>download(await call('ExportData'),'CampusWay-routes.json'));if(a==='check')return task(async()=>{versionResult=await call('CheckVersion','');render();});if(a==='export-logs')download(JSON.stringify(store.snapshot.logs,null,2),'CampusWay-events.json');if(a==='copy-logs')task(async()=>{await navigator.clipboard.writeText(store.snapshot.logs.map(l=>`${l.time} ${message(l.message)}`).join('\n'));toast('copied');});});
+if(target.dataset.select)return chooseRoute(target.dataset.select);if(a==='edit-route')return edit(store.snapshot.profiles.find(p=>p.id===target.dataset.id));if(a==='add')return edit();if(a==='edit')return edit(selected());if(a==='edit-account')return edit(store.snapshot.profiles.find(p=>p.id===target.dataset.id));if(a==='goto-connections')return go('connections');if(a==='connect')return start(active()||selected());if(a==='close')return modal.close();if(a==='cancel-challenge')return task(async()=>{await call('Disconnect');modal.close();});if(a?.startsWith('view-'))return task(()=>call('SavePreferences',{...store.snapshot.preferences,view:a.slice(5)}));if(a==='delete')return confirmAction('removeConfirm',async()=>{await call('DeleteProfile',editorProfile.id);editorProfile=null;go('connections');});if(a==='forget')return confirmAction('forget',()=>call('ForgetPassword',target.dataset.id));if(a==='export')return task(async()=>download(await call('ExportData'),'CampusWay-routes.json'));
+if(a==='export-daily-logs')return task(async()=>{const today=new Date().toISOString().slice(0,10);download(await call('ExportDailyLogs'),`CampusWay-${today}.log`);toast('exported');});
+if(a==='open-logs-folder')return task(async()=>call('OpenLogsFolder'));
+if(a==='apply-update'){toast('updating');return task(async()=>{const res=await call('ApplyUpdate','');dialog('updateReady',`<p>${t('updateReady')}: <strong>${esc(res.version||'')}</strong></p><p class="hint">${esc(res.file||'')}</p><div class="dialog-actions">${button('close','close','primary')}</div>`);});}
+if(a==='toggle-ip-mask'){store.ipMasked=!store.ipMasked;updateHome();return;}
+if(a==='check')return task(async()=>{versionResult=await call('CheckVersion','');render();});if(a==='export-logs')download(JSON.stringify(store.snapshot.logs,null,2),'CampusWay-events.json');if(a==='copy-logs')task(async()=>{await navigator.clipboard.writeText(store.snapshot.logs.map(l=>`${l.time} ${message(l.message)}`).join('\n'));toast('copied');});});
 app.addEventListener('input',e=>{if(e.target.id==='search'){store.query=e.target.value;document.querySelector('#route-list').innerHTML=routes();}});
 app.addEventListener('change',e=>{if(e.target.closest('#editor')){syncProtocol();return;}
 if(e.target.dataset.widget){

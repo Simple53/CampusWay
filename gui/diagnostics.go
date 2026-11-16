@@ -35,9 +35,10 @@ type DiagnosticReport struct {
 // Sites tested by default. The first three are common campus portals; users add
 // more through each connection's "additional domains" field.
 var defaultDiagnosticSites = []struct{ name, url string }{
-	{"ehall", "https://ehallapp.nnu.edu.cn"},
-	{"zgzj", "http://zgzj.njnu.edu.cn"},
-	{"hsnnu", "https://hsnnu.nnu.edu.cn"},
+	{"Apple", "https://www.apple.com"},
+	{"GitHub", "https://github.com"},
+	{"Google", "https://www.google.com"},
+	{"办事大厅", "https://ehallapp.nnu.edu.cn"},
 }
 
 // RunDiagnostics probes the gateway directly and every target through the
