@@ -87,21 +87,3 @@ export function networkDiag(){
 		</div>
 	</section>`;
 }
-		<div class="site-test-grid">
-			${rows.map(item => {
-				const match = r?.targets?.find(x => x.name.toLowerCase() === item.name.toLowerCase()) || (r?.targets?.length ? null : item);
-				const hasResult = match && match.ms !== undefined;
-				const statusText = testing ? '...' : (hasResult ? `${match.ms}ms` : t('test'));
-				const isOk = match?.ok;
-				return `
-					<div class="site-card" data-action="run-diag" role="button" tabindex="0">
-						<div class="site-card-icon">${siteLogo(item.name)}</div>
-						<span class="site-card-name">${esc(item.name)}</span>
-						<div class="site-card-divider"></div>
-						<span class="site-card-status ${hasResult ? (isOk ? 'ok' : 'err') : ''}">${statusText}</span>
-					</div>
-				`;
-			}).join('')}
-		</div>
-	</section>`;
-}
