@@ -3,10 +3,12 @@ package auth
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/nnu-connect/nnu-connect/internal/authinput"
+	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
+	"github.com/nnu-connect/nnu-connect/internal/authinput"
 	"github.com/nnu-connect/nnu-connect/log"
 )
 
@@ -78,6 +80,14 @@ func (s *Session) sendSms(phone, loginDomain, graphCheckCode string) (int, error
 	body, _ := io.ReadAll(resp.Body)
 	log.DebugPrintf("Received sendSms: %s", string(body))
 
+	trimmedBody := strings.TrimSpace(string(body))
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("发送短信请求错误 (HTTP %d): %s", resp.StatusCode, trimmedBody)
+	}
+	if strings.HasPrefix(trimmedBody, "<") {
+		return 0, fmt.Errorf("网关返回了非预期响应: %s", trimmedBody)
+	}
+
 	var re struct {
 		Code    int    `json:"code"`
 		Message string `json:"message"`
@@ -129,6 +139,14 @@ func (s *Session) smsCheckCodeImpl(code, phone, loginDomain, graphCheckCode stri
 	}(resp.Body)
 	body, _ := io.ReadAll(resp.Body)
 	log.DebugPrintf("Received smsCheckCode: %s", string(body))
+
+	trimmedBody := strings.TrimSpace(string(body))
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("短信校验请求错误 (HTTP %d): %s", resp.StatusCode, trimmedBody)
+	}
+	if strings.HasPrefix(trimmedBody, "<") {
+		return 0, fmt.Errorf("网关返回了非预期响应: %s", trimmedBody)
+	}
 
 	var re struct {
 		Code    int    `json:"code"`

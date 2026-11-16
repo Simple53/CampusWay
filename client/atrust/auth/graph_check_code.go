@@ -8,6 +8,7 @@ import (
 	_ "image/gif"
 	_ "image/jpeg"
 	_ "image/png"
+	"strconv"
 	"strings"
 )
 
@@ -60,7 +61,47 @@ func canonicalizeGraphCheckCode(raw string, imgData []byte) (string, error) {
 		return marshalGraphCheckCode(payload)
 	}
 
+	if payload, ok := parseGraphCheckCodeSemicolonString(trimmed); ok {
+		w, h, err := decodeImageSize(imgData)
+		if err != nil {
+			return "", fmt.Errorf("failed to decode captcha image size: %w", err)
+		}
+		payload.Width = w
+		payload.Height = h
+		return marshalGraphCheckCode(payload)
+	}
+
 	return "", fmt.Errorf("unsupported graph check code format")
+}
+
+func parseGraphCheckCodeSemicolonString(raw string) (graphCheckCodePayload, bool) {
+	parts := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ';' || r == '\n'
+	})
+	if len(parts) == 0 {
+		return graphCheckCodePayload{}, false
+	}
+	var coordinates [][]int
+	for _, part := range parts {
+		trimmedPart := strings.TrimSpace(part)
+		if trimmedPart == "" {
+			continue
+		}
+		sub := strings.Split(trimmedPart, ",")
+		if len(sub) != 2 {
+			return graphCheckCodePayload{}, false
+		}
+		x, err1 := strconv.Atoi(strings.TrimSpace(sub[0]))
+		y, err2 := strconv.Atoi(strings.TrimSpace(sub[1]))
+		if err1 != nil || err2 != nil {
+			return graphCheckCodePayload{}, false
+		}
+		coordinates = append(coordinates, []int{x, y})
+	}
+	if len(coordinates) == 0 {
+		return graphCheckCodePayload{}, false
+	}
+	return graphCheckCodePayload{Coordinates: coordinates}, true
 }
 
 func parseGraphCheckCodeObject(raw string) (graphCheckCodePayload, bool) {

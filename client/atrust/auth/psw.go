@@ -6,10 +6,12 @@ import (
 	"crypto/rsa"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
 	"math/big"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/nnu-connect/nnu-connect/log"
 )
@@ -83,6 +85,14 @@ func (s *Session) pswImpl(username, password, loginDomain, graphCheckCode string
 	}(resp.Body)
 	body, _ := io.ReadAll(resp.Body)
 	log.DebugPrintf("Received psw: %s", string(body))
+
+	trimmedBody := strings.TrimSpace(string(body))
+	if resp.StatusCode != http.StatusOK {
+		return 0, fmt.Errorf("网关认证请求错误 (HTTP %d): %s", resp.StatusCode, trimmedBody)
+	}
+	if strings.HasPrefix(trimmedBody, "<") {
+		return 0, fmt.Errorf("网关返回了非预期页面 (可能是验证码超时或请求被拦截): %s", trimmedBody)
+	}
 
 	var re struct {
 		Code    int    `json:"code"`

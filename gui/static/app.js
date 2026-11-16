@@ -14,11 +14,21 @@ function go(path){location.hash=path;}
 function toast(text){notice.textContent=message(text);clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>notice.textContent='',4500);}
 function render(){const scroll=document.querySelector('#main')?.scrollTop||0;const [page='home',section]=route(),s=store.snapshot;setLanguage(s.preferences.language);applyAppearance(s.preferences);document.body.dataset.density=s.preferences.density;
  const activeRoute = active() || selected();
- const isRunning = s.state === 'connected';
+ const isRunning = s.state === 'connected' || s.state === 'connecting';
+ const profiles = s.profiles || [];
  app.innerHTML=`<header class="topbar">
    <div class="topbar-left"></div>
-   <div class="topbar-right" style="display:flex;align-items:center;gap:12px;margin-left:auto;">
-     ${activeRoute ? `<span class="current-route-badge"><span class="route-hint-text">${t('currentRoute')}:</span> <strong>${esc(activeRoute.name)}</strong></span>` : ''}
+   <div class="topbar-right" style="display:flex;align-items:center;gap:10px;margin-left:auto;">
+     ${profiles.length ? `
+       <label class="current-route-selector" title="${t('clickSwitch')}">
+         <span class="route-hint-text">${t('currentRoute')}:</span>
+         <select class="topbar-route-select" data-action="topbar-select-route">
+           ${profiles.map(p => `
+             <option value="${p.id}" ${p.id === activeRoute?.id ? 'selected' : ''}>${esc(p.name)}</option>
+           `).join('')}
+         </select>
+       </label>
+     ` : ''}
      ${activeRoute ? toggleSwitch(isRunning, 'toggle-global', `title="${t(isRunning?'disconnect':'connect')}"`) : ''}
    </div>
  </header>
@@ -105,7 +115,13 @@ function verification(e){
 			pins.appendChild(pin);
 
 			if(input){
-				input.value=points.map(p=>`${p.x},${p.y}`).join(';');
+				const nw = img.naturalWidth || Math.round(rect.width);
+				const nh = img.naturalHeight || Math.round(rect.height);
+				input.value = JSON.stringify({
+					coordinates: points.map(p => [p.x, p.y]),
+					width: nw,
+					height: nh
+				});
 			}
 		};
 	}
@@ -260,6 +276,9 @@ if(a==='toggle-ip-mask'){store.ipMasked=!store.ipMasked;updateHome();return;}
 if(a==='check')return task(async()=>{versionResult=await call('CheckVersion','');render();});if(a==='export-logs')download(JSON.stringify(store.snapshot.logs,null,2),'CampusWay-events.json');if(a==='copy-logs')task(async()=>{await navigator.clipboard.writeText(store.snapshot.logs.map(l=>`${l.time} ${message(l.message)}`).join('\n'));toast('copied');});});
 app.addEventListener('input',e=>{if(e.target.id==='search'){store.query=e.target.value;document.querySelector('#route-list').innerHTML=routes();}});
 app.addEventListener('change',e=>{if(e.target.closest('#editor')){syncProtocol();return;}
+if(e.target.dataset.action==='topbar-select-route'){
+	return chooseRoute(e.target.value);
+}
 if(e.target.dataset.widget){
 	const w=e.target.dataset.widget;
 	const current=[...(store.snapshot.preferences.widgets||['status','speed','diag','logs'])];

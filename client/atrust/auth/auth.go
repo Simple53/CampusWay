@@ -182,6 +182,11 @@ func (s *Session) withGraphCheckCode(process func(string) (int, error), graphCod
 
 		log.DebugPrintf("graphCheckCode submitted: %s", graphCheckCode)
 
+		if normalized, err := canonicalizeGraphCheckCode(graphCheckCode, imgData); err == nil {
+			graphCheckCode = normalized
+			log.DebugPrintf("graphCheckCode canonicalized: %s", graphCheckCode)
+		}
+
 		graphCheckCodeEnable, err = process(graphCheckCode)
 		if err != nil {
 			return err

@@ -1,6 +1,47 @@
 import {t} from '../../core/i18n.js';
-import {store} from '../../core/store.js';
+import {store,selected,active} from '../../core/store.js';
 import {esc,icon} from '../../core/ui.js';
+
+function getTemplateSites(p){
+	if(!p) return [
+		{name: 'Apple', url: 'https://www.apple.com'},
+		{name: 'GitHub', url: 'https://github.com'},
+		{name: 'Google', url: 'https://www.google.com'},
+		{name: '知网 (CNKI)', url: 'https://www.cnki.net'}
+	];
+	if(p.customDomains){
+		const domains=p.customDomains.split(/[,;\n\s]+/).filter(Boolean);
+		if(domains.length){
+			return domains.slice(0, 4).map(d => {
+				const title = d.includes('.') ? (d.split('.')[0].toUpperCase()) : d;
+				return {name: title, url: 'https://' + d};
+			});
+		}
+	}
+	const s = (p.server + ' ' + p.name).toLowerCase();
+	if(s.includes('zju') || s.includes('浙大')){
+		return [
+			{name: '浙大办公网', url: 'https://service.zju.edu.cn'},
+			{name: '教务系统', url: 'https://jwgl.zju.edu.cn'},
+			{name: '图书资源', url: 'https://lib.zju.edu.cn'},
+			{name: '知网 (CNKI)', url: 'https://www.cnki.net'}
+		];
+	}
+	if(s.includes('nnu') || s.includes('njnu') || s.includes('南师')){
+		return [
+			{name: '办事大厅', url: 'https://ehallapp.nnu.edu.cn'},
+			{name: '教务系统', url: 'http://jwgl.njnu.edu.cn'},
+			{name: '知网 (CNKI)', url: 'https://www.cnki.net'},
+			{name: '公共网关', url: 'https://www.baidu.com'}
+		];
+	}
+	return [
+		{name: 'Apple', url: 'https://www.apple.com'},
+		{name: 'GitHub', url: 'https://github.com'},
+		{name: 'Google', url: 'https://www.google.com'},
+		{name: '知网 (CNKI)', url: 'https://www.cnki.net'}
+	];
+}
 
 function siteLogo(name){
 	const n=name.toLowerCase();
@@ -12,13 +53,9 @@ function siteLogo(name){
 
 export function networkDiag(){
 	const r=store.diagReport,testing=store.diagTesting;
-	const defaultSites = [
-		{name: 'Apple', url: 'https://www.apple.com'},
-		{name: 'GitHub', url: 'https://github.com'},
-		{name: 'Google', url: 'https://www.google.com'},
-		{name: '办事大厅', url: 'https://ehallapp.nnu.edu.cn'}
-	];
-	const rows = (r?.targets?.length ? r.targets : defaultSites).slice(0, 4);
+	const p = active() || selected();
+	const templateSites = getTemplateSites(p);
+	const rows = (r?.targets?.length ? r.targets : templateSites).slice(0, 4);
 
 	return `<section class="home-module diag-module" aria-labelledby="diag-title">
 		<div class="module-heading">
@@ -28,10 +65,28 @@ export function networkDiag(){
 			</div>
 			<div style="display:flex;align-items:center;gap:6px;">
 				<button type="button" class="icon-btn quiet btn-sm ${testing?'spin':''}" data-action="run-diag" title="${t('testNow')}" aria-label="${t('testNow')}">
-					${icon(testing?'refresh':'wifi')}
+					${icon(testing?'refresh':'zap')}
 				</button>
 			</div>
 		</div>
+		<div class="site-test-grid">
+			${rows.map(item => {
+				const match = r?.targets?.find(x => x.name.toLowerCase() === item.name.toLowerCase()) || (r?.targets?.length ? null : item);
+				const hasResult = match && match.ms !== undefined;
+				const statusText = testing ? '...' : (hasResult ? `${match.ms}ms` : t('test'));
+				const isOk = match?.ok;
+				return `
+					<div class="site-card" data-action="run-diag" role="button" tabindex="0">
+						<div class="site-card-icon">${siteLogo(item.name)}</div>
+						<span class="site-card-name">${esc(item.name)}</span>
+						<div class="site-card-divider"></div>
+						<span class="site-card-status ${hasResult ? (isOk ? 'ok' : 'err') : ''}">${statusText}</span>
+					</div>
+				`;
+			}).join('')}
+		</div>
+	</section>`;
+}
 		<div class="site-test-grid">
 			${rows.map(item => {
 				const match = r?.targets?.find(x => x.name.toLowerCase() === item.name.toLowerCase()) || (r?.targets?.length ? null : item);

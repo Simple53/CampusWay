@@ -41,6 +41,51 @@ var defaultDiagnosticSites = []struct{ name, url string }{
 	{"办事大厅", "https://ehallapp.nnu.edu.cn"},
 }
 
+// getProfileDiagnosticSites 依据当前线路的自定义配置或机构特征返回专属的测试网站模板
+func getProfileDiagnosticSites(prof *Profile) []struct{ name, url string } {
+	if prof == nil {
+		return defaultDiagnosticSites
+	}
+	var customSites []struct{ name, url string }
+	for _, domain := range strings.FieldsFunc(prof.CustomDomains, func(r rune) bool { return r == ',' || r == ';' || r == '\n' || r == ' ' }) {
+		if strings.ContainsAny(domain, "/\\@?# ") {
+			continue
+		}
+		title := domain
+		if idx := strings.Index(title, "."); idx > 0 {
+			title = strings.ToUpper(title[:1]) + title[1:idx]
+		}
+		customSites = append(customSites, struct{ name, url string }{title, "https://" + domain})
+		if len(customSites) >= 4 {
+			break
+		}
+	}
+	if len(customSites) > 0 {
+		return customSites
+	}
+
+	server := strings.ToLower(prof.Server)
+	name := strings.ToLower(prof.Name)
+	if strings.Contains(server, "zju.edu.cn") || strings.Contains(name, "zju") || strings.Contains(name, "浙大") {
+		return []struct{ name, url string }{
+			{"浙大办公网", "https://service.zju.edu.cn"},
+			{"教务系统", "https://jwgl.zju.edu.cn"},
+			{"图书资源", "https://lib.zju.edu.cn"},
+			{"知网 (CNKI)", "https://www.cnki.net"},
+		}
+	}
+	if strings.Contains(server, "nnu.edu.cn") || strings.Contains(server, "njnu.edu.cn") || strings.Contains(name, "nnu") || strings.Contains(name, "南师") {
+		return []struct{ name, url string }{
+			{"办事大厅", "https://ehallapp.nnu.edu.cn"},
+			{"教务系统", "http://jwgl.njnu.edu.cn"},
+			{"知网 (CNKI)", "https://www.cnki.net"},
+			{"公共网关", "https://www.baidu.com"},
+		}
+	}
+
+	return defaultDiagnosticSites
+}
+
 // RunDiagnostics probes the gateway directly and every target through the
 // tunnel (when connected). Probes run concurrently so the whole test takes
 // about one timeout, not one per site.
@@ -67,18 +112,7 @@ func (s *AppServer) RunDiagnostics() (DiagnosticReport, error) {
 		report.GatewayIP, report.FakeIP = resolveGateway(prof.Server)
 	}
 
-	sites := append([]struct{ name, url string }{}, defaultDiagnosticSites...)
-	if prof != nil {
-		for _, domain := range strings.FieldsFunc(prof.CustomDomains, func(r rune) bool { return r == ',' || r == ';' || r == '\n' || r == ' ' }) {
-			if len(sites) >= 8 {
-				break
-			}
-			if strings.ContainsAny(domain, "/\\@?# ") {
-				continue
-			}
-			sites = append(sites, struct{ name, url string }{domain, "https://" + domain})
-		}
-	}
+	sites := getProfileDiagnosticSites(prof)
 
 	report.Targets = make([]DiagnosticTarget, len(sites))
 	proxyURL, _ := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", httpPort))
