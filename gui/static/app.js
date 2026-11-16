@@ -55,16 +55,82 @@ function edit(profile){
 	go('editor');
 }
 async function start(p=selected(),automatic=false){if(!p)return edit();if(p.id===store.snapshot.active)return automatic?undefined:task(()=>call('Disconnect'));if(!p.username&&!store.snapshot.preview){toast('saveFirst');return edit(p);}const run=async()=>{if(p.hasPassword||p.remember||store.snapshot.preview||(p.protocol==='atrust'&&p.options?.authType==='auth/smsCheckCode')){try{await task(()=>call('Connect',p.id,'',false));return;}catch(err){if(!err?.message?.toLowerCase().includes('password'))return;}}dialog('auth',`<form id="password-form">${field('password','password','','password','required autocomplete="current-password" autofocus')}<label class="check"><input type="checkbox" name="remember" checked ${store.snapshot.canRemember?'':'disabled'}>${t('remember')}</label><div class="dialog-actions">${button('cancel','close')}<button class="primary" type="submit">${t('connect')}</button></div></form>`);const inp=document.querySelector('#password-form input[type=password]');if(inp)setTimeout(()=>inp.focus(),50);document.querySelector('#password-form').onsubmit=e=>{e.preventDefault();const value=e.target.elements.password.value;const remember=e.target.elements.remember?.checked??true;e.target.reset();modal.close();task(()=>call('Connect',p.id,value,remember));};};if(store.snapshot.active&&!automatic){dialog('switchConfirm',`<div class="dialog-actions">${button('cancel','close')}${button('confirm','confirm','primary')}</div>`);modal.querySelector('[data-action=confirm]').onclick=()=>{modal.close();run();};}else run();}
-// Selecting a running route is idempotent; credentials are obtained before the old worker stops.
-async function chooseRoute(id){if(store.busy||store.snapshot.active===id)return;const p=store.snapshot.profiles.find(p=>p.id===id);if(!p)return;let ready=false;await task(async()=>{await call('SelectProfile',id);ready=true;});if(ready)await start(p,true);}
+// 切换线路时仅更新选中状态，绝不自动发起连接
+async function chooseRoute(id){
+	if(store.busy||store.snapshot.selected===id)return;
+	await task(()=>call('SelectProfile',id));
+}
 
 function verification(e){
-	const imgHtml = e.image ? `<div style="text-align:center;margin:14px 0;"><img class="challenge-image" src="${esc(e.image)}" alt="${t('verify')}" style="max-height:90px;border-radius:6px;border:1px solid var(--line);background:#fff;padding:2px;"></div>` : '';
-	dialog('verify',`<p>${t('verifyHint')}</p>${imgHtml}<form id="verify-form">${field('response','response','','text','required autocomplete="one-time-code" autofocus')}<div class="dialog-actions">${button('stop','cancel-challenge')}<button type="submit" id="submit-verify-btn" class="primary">${t('submit')}</button></div></form>`,'challenge');
+	const imgHtml = e.image ? `
+		<div class="captcha-box">
+			<div class="captcha-preview-wrap" id="captcha-wrap" title="${t('captchaHint')}">
+				<img id="captcha-img" class="challenge-image" src="${esc(e.image)}" alt="${t('verify')}" draggable="false">
+				<div id="captcha-pins"></div>
+			</div>
+			<div class="captcha-actions">
+				<span id="captcha-hint" class="hint">${t('captchaHint')}</span>
+				<div style="display:flex;gap:6px;">
+					<button type="button" class="quiet" id="reset-points-btn">${t('clearPoints')}</button>
+					<button type="button" class="quiet" id="refresh-captcha-btn">${t('refreshCaptcha')}</button>
+				</div>
+			</div>
+		</div>` : '';
+	dialog('verify',`<p>${t('verifyHint')}</p>${imgHtml}<form id="verify-form">${field('response','response','','text','autocomplete="one-time-code" autofocus')}<div class="dialog-actions">${button('stop','cancel-challenge')}<button type="submit" id="submit-verify-btn" class="primary">${t('submit')}</button></div></form>`,'challenge');
 	const form=document.querySelector('#verify-form');
 	const input=form?.querySelector('input');
 	const submitBtn=form?.querySelector('#submit-verify-btn');
+	const wrap=document.querySelector('#captcha-wrap');
+	const img=document.querySelector('#captcha-img');
+	const pins=document.querySelector('#captcha-pins');
+	const resetBtn=document.querySelector('#reset-points-btn');
+	const refreshBtn=document.querySelector('#refresh-captcha-btn');
+	let points=[];
+
 	if(input)setTimeout(()=>input.focus(),50);
+
+	if(wrap&&img&&pins){
+		wrap.onclick=(ev)=>{
+			const rect=img.getBoundingClientRect();
+			if(ev.clientX<rect.left||ev.clientX>rect.right||ev.clientY<rect.top||ev.clientY>rect.bottom)return;
+			const scaleX=(img.naturalWidth||rect.width)/rect.width;
+			const scaleY=(img.naturalHeight||rect.height)/rect.height;
+			const px=Math.round((ev.clientX-rect.left)*scaleX);
+			const py=Math.round((ev.clientY-rect.top)*scaleY);
+			points.push({x:px,y:py});
+
+			const pin=document.createElement('span');
+			pin.className='captcha-pin';
+			pin.style.left=`${ev.clientX-rect.left}px`;
+			pin.style.top=`${ev.clientY-rect.top}px`;
+			pin.textContent=String(points.length);
+			pins.appendChild(pin);
+
+			if(input){
+				input.value=points.map(p=>`${p.x},${p.y}`).join(';');
+			}
+		};
+	}
+
+	if(resetBtn){
+		resetBtn.onclick=()=>{
+			points=[];
+			if(pins)pins.innerHTML='';
+			if(input)input.value='';
+		};
+	}
+
+	if(refreshBtn){
+		refreshBtn.onclick=async()=>{
+			modal.close();
+			challengeID='';
+			toast('refreshingCaptcha');
+			await task(async()=>{
+				await call('Disconnect');
+				await start(active()||selected(),true);
+			});
+		};
+	}
 
 	const doSubmit=async()=>{
 		const value=(input?.value||'').trim();
@@ -142,18 +208,17 @@ if(a==='save-profile'){
 	e.preventDefault();
 	return handleSaveProfile(document.querySelector('#editor'));
 }
-if(a==='toggle-connect'||a==='toggle-global')return start(active()||selected());
+if(a==='toggle-connect'||a==='toggle-global'){
+	const s=store.snapshot;
+	if(s.state==='connected'||s.state==='connecting'){
+		return task(()=>call('Disconnect'));
+	}
+	return start(active()||selected());
+}
 if(a==='minimize-window')return call('MinimizeWindow');
 if(a==='toggle-route'){
 	const id=target.dataset.id||target.closest('[data-id]')?.dataset.id;
-	const p=store.snapshot.profiles.find(x=>x.id===id);
-	if(p){
-		const s=store.snapshot;
-		if(p.id===s.active&&(s.state==='connected'||s.state==='connecting')){
-			return task(()=>call('Disconnect'));
-		}
-		return start(p,true);
-	}
+	if(id)return chooseRoute(id);
 	return;
 }
 if(a==='run-diag'){store.diagTesting=true;updateHome();return task(async()=>{try{store.diagReport=await call('RunDiagnostics');}finally{store.diagTesting=false;updateHome();}});}

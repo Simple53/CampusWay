@@ -6,7 +6,6 @@ import {esc,icon,button,select} from '../core/ui.js';
 export const settingGroups=[
 	['appearance','settings-2','appearanceHint'],
 	['accounts','shield','accountsHint'],
-	['connections','route','connectionHint'],
 	['data','server','dataHint'],
 	['diagnostics','activity','diagnosticsHint'],
 	['about','circle-help','']
@@ -23,7 +22,7 @@ export function settings(section='',result=null){
 		return `<div class="page-heading"><h1>${t('settings')}</h1></div>
 		<div class="settings-groups">
 			${settingGroups.map(([id,i,hint])=>`
-				<a class="setting-row" href="${id==='connections'?'#connections':'#settings/'+id}">
+				<a class="setting-row" href="#settings/${id}">
 					${icon(i)}
 					<span>
 						<strong>${t(id)}</strong>

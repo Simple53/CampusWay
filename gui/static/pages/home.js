@@ -114,11 +114,26 @@ export function home() {
  * 保持用户当前的焦点和计时器状态，仅在流量或连通性诊断产生数据差异时更新对应模块的 innerHTML。
  */
 export function updateHome() {
+	const logViewport = document.querySelector('#home-log-console .console-viewport');
+	const prevScrollTop = logViewport ? logViewport.scrollTop : null;
+	const isNearBottom = logViewport ? (logViewport.scrollHeight - logViewport.scrollTop - logViewport.clientHeight < 30) : true;
+
 	for (const [id, html] of Object.entries(modules())) {
 		const e = document.getElementById(id);
 		if (e && renderedModules[id] !== html) {
 			e.innerHTML = html;
 			renderedModules[id] = html;
+		}
+	}
+
+	if (logViewport) {
+		const newLogViewport = document.querySelector('#home-log-console .console-viewport');
+		if (newLogViewport && prevScrollTop !== null) {
+			if (isNearBottom) {
+				newLogViewport.scrollTop = newLogViewport.scrollHeight;
+			} else {
+				newLogViewport.scrollTop = prevScrollTop;
+			}
 		}
 	}
 }

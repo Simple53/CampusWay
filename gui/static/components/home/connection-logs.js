@@ -3,25 +3,33 @@ import {store} from '../../core/store.js';
 import {esc,icon} from '../../core/ui.js';
 
 /**
- * connectionLogs 渲染主页面板中的实时连接与接口日志流。
- * 展示底层认证接口、网关解析、路由添加、端口绑定与运行状态。
+ * connectionLogs 渲染主页面板中的终端式日志文本框。
+ * 具备固定独立高度与内部滚动条，滚动时其他板块原地保留不被隐藏。
  */
 export function connectionLogs(){
-	const logs = store.snapshot.logs.slice(-6).reverse();
+	const logs = store.snapshot.logs || [];
 	return `<section class="home-module log-module" aria-labelledby="logs-title">
 		<div class="module-heading">
-			<h2 id="logs-title">${t('connectionLogs')}</h2>
-			<a href="#settings/diagnostics">${t('allLogs')}${icon('arrow-right')}</a>
+			<div style="display:flex;align-items:center;gap:8px;">
+				<h2 id="logs-title">${t('connectionLogs')}</h2>
+				<span class="console-count">${logs.length}</span>
+			</div>
+			<div class="module-actions" style="display:flex;align-items:center;gap:6px;">
+				<button type="button" class="icon-btn quiet" data-action="copy-logs" title="${t('copy')}" aria-label="${t('copy')}">${icon('copy')}</button>
+				<a href="#settings/diagnostics" class="icon-btn quiet" title="${t('allLogs')}" aria-label="${t('allLogs')}">${icon('arrow-right')}</a>
+			</div>
 		</div>
-		${logs.length ? `
-			<ol class="event-list" style="max-height:260px;overflow-y:auto;font-family:var(--font-mono, 'Consolas', monospace);font-size:12px;">
-				${logs.map(l=>`
-					<li>
-						<time style="flex-shrink:0;">${clock(l.time)}</time>
-						<span style="word-break:break-all;user-select:text;">${esc(message(l.message))}</span>
-					</li>
-				`).join('')}
-			</ol>
-		` : `<p class="module-empty">${t('noLogs')}</p>`}
+		<div class="console-container" id="home-log-console">
+			${logs.length ? `
+				<div class="console-viewport">
+					${logs.map(l=>`
+						<div class="console-row">
+							<span class="console-ts">${clock(l.time)}</span>
+							<span class="console-text">${esc(message(l.message))}</span>
+						</div>
+					`).join('')}
+				</div>
+			` : `<div class="console-empty">${t('noLogs')}</div>`}
+		</div>
 	</section>`;
 }

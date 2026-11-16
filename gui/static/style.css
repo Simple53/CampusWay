@@ -45,3 +45,24 @@
 .widget-shell:hover .widget-resize-handle,.widget-resize-handle:hover{opacity:.95;color:var(--ink)}
 .widget-resize-handle.active{opacity:1;color:var(--accent);transform:scale(1.25)}
 .widget-shell.resizing{box-shadow:0 6px 18px rgba(0,0,0,.15);z-index:10;transition:none!important}
+
+/* Terminal-like log console */
+.console-container{position:relative;border:1px solid var(--line);border-radius:8px;background:var(--surface);overflow:hidden;margin-top:10px;height:220px;display:flex;flex-direction:column}
+.console-count{font-size:11px;font-variant-numeric:tabular-nums;padding:1px 6px;border-radius:10px;background:var(--surface);color:var(--muted);border:1px solid var(--line)}
+.console-viewport{flex:1;overflow-y:auto;overscroll-behavior:contain;padding:10px 12px;font-family:ui-monospace,SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:11.5px;line-height:1.65;user-select:text}
+.console-viewport::-webkit-scrollbar{width:6px}
+.console-viewport::-webkit-scrollbar-thumb{background:var(--line);border-radius:3px}
+.console-viewport::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+.console-row{display:grid;grid-template-columns:72px 1fr;gap:10px;border-bottom:1px solid rgba(128,128,128,.08);padding:3px 0}
+.console-row:last-child{border-bottom:0}
+.console-ts{color:var(--muted);font-variant-numeric:tabular-nums;flex-shrink:0}
+.console-text{word-break:break-all;color:var(--ink)}
+.console-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:12px}
+
+/* Interactive Captcha */
+.captcha-box{display:flex;flex-direction:column;align-items:center;gap:8px;margin:10px 0}
+.captcha-preview-wrap{position:relative;display:inline-block;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:#fff;user-select:none;cursor:crosshair}
+.captcha-preview-wrap img{display:block;max-height:110px;width:auto}
+.captcha-pin{position:absolute;width:18px;height:18px;border-radius:50%;background:#e03e3e;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;transform:translate(-50%,-50%);pointer-events:none;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.captcha-actions{display:flex;align-items:center;justify-content:space-between;width:100%;max-width:320px;font-size:11.5px;color:var(--muted)}
+.captcha-actions button{padding:4px 8px;min-height:28px;font-size:11.5px}
