@@ -168,7 +168,11 @@ func (c *Client) loginAuthAndPsw(graphCodeFile string) error {
 				log.Printf("Graph check code saved to %s", graphCodeFile)
 			}
 
-			fmt.Print("Please enter rand code: ")
+			if authinput.Handler == nil {
+				fmt.Print("Please enter rand code: ")
+			} else {
+				log.Print("Prompting for image verification code...")
+			}
 			_, err = authinput.Read("image verification code", buf.Bytes(), &randCode)
 			if err != nil {
 				return err
@@ -276,7 +280,11 @@ func (c *Client) loginSMS() error {
 
 	log.Printf("SMS code is sent or still valid")
 
-	fmt.Print("Please enter your SMS code: ")
+	if authinput.Handler == nil {
+		fmt.Print("Please enter your SMS code: ")
+	} else {
+		log.Print("Prompting for SMS code...")
+	}
 	smsCode := ""
 	_, err = authinput.Read("SMS code", nil, &smsCode)
 	if err != nil {
@@ -328,11 +336,15 @@ func (c *Client) loginTOTP() error {
 	var totpCode string
 	var err error
 	if c.totpSecret == "" {
-		fmt.Print("Please enter your TOTP code:")
+		if authinput.Handler == nil {
+			fmt.Print("Please enter your TOTP code: ")
+		} else {
+			log.Print("Prompting for TOTP code...")
+		}
 		_, err = authinput.Read("authenticator code", nil, &totpCode)
 	} else {
 		totpCode, err = totp.GenerateCode(c.totpSecret, time.Now())
-		fmt.Println("Generate TOTP code:", totpCode)
+		log.Println("Generated TOTP code successfully")
 	}
 	if err != nil {
 		return err

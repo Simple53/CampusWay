@@ -15,7 +15,7 @@ import (
 
 //go:embed static
 var staticFS embed.FS
-var version = "0.1.1"
+var version = "0.1.2"
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "--engine" {
@@ -44,6 +44,7 @@ func main() {
 		Windows:           &windows.Options{Theme: windows.SystemDefault},
 		OnStartup: func(ctx context.Context) {
 			appCtx = ctx
+			applyWindowIcons()
 			tray = setupTray(ctx, app, func() {
 				quitting = true
 				_ = app.Disconnect()
@@ -92,6 +93,7 @@ func main() {
 				if appCtx != nil {
 					runtime.WindowUnminimise(appCtx)
 					runtime.WindowShow(appCtx)
+					applyWindowIcons()
 				}
 			},
 		},

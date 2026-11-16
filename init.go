@@ -18,7 +18,7 @@ import (
 
 var CommitID string
 
-const campusWayVersion = "0.1.1"
+const campusWayVersion = "0.1.2"
 
 func getTOMLVal[T int | uint64 | string | bool](valPointer *T, defaultVal T) T {
 	if valPointer == nil {

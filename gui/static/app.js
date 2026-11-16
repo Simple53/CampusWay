@@ -21,9 +21,7 @@ function render(){const scroll=document.querySelector('#main')?.scrollTop||0;con
      ${activeRoute ? `<span class="header-route-name">${esc(activeRoute.name)}</span>` : ''}
    </div>
    <div style="display:flex;align-items:center;gap:12px;">
-     <span class="header-label">${s.preview?t('preview'):t('localProxy')}</span>
      ${activeRoute ? toggleSwitch(isRunning, 'toggle-global', `title="${t(isRunning?'disconnect':'connect')}"`) : ''}
-     <button type="button" class="icon-btn quiet" data-action="minimize-window" title="${t('minimize')}" aria-label="${t('minimize')}">${icon('minus')}</button>
    </div>
  </header>
  <main id="main" tabindex="-1">${page==='editor'?editor(editorProfile||{}):page==='connections'?connections():page==='settings'?settings(section,versionResult):home()}</main>
@@ -60,7 +58,19 @@ async function start(p=selected(),automatic=false){if(!p)return edit();if(p.id==
 // Selecting a running route is idempotent; credentials are obtained before the old worker stops.
 async function chooseRoute(id){if(store.busy||store.snapshot.active===id)return;const p=store.snapshot.profiles.find(p=>p.id===id);if(!p)return;let ready=false;await task(async()=>{await call('SelectProfile',id);ready=true;});if(ready)await start(p,true);}
 
-function verification(e){dialog('verify',`<p>${t('verifyHint')}</p>${e.image?`<img class="challenge-image" src="${esc(e.image)}" alt="${t('verify')}">`:''}<form id="verify-form">${field('response','response','','text','required autocomplete="one-time-code"')}<div class="dialog-actions">${button('stop','cancel-challenge')}<button type="submit" class="primary">${t('submit')}</button></div></form>`,'challenge');document.querySelector('#verify-form').onsubmit=event=>{event.preventDefault();const value=event.target.elements.response.value;event.target.reset();modal.close();task(()=>call('SubmitChallenge',e.id,value));};}
+function verification(e){
+	const imgHtml = e.image ? `<div style="text-align:center;margin:14px 0;"><img class="challenge-image" src="${esc(e.image)}" alt="${t('verify')}" style="max-height:90px;border-radius:6px;border:1px solid var(--line);background:#fff;padding:2px;"></div>` : '';
+	dialog('verify',`<p>${t('verifyHint')}</p>${imgHtml}<form id="verify-form">${field('response','response','','text','required autocomplete="one-time-code" autofocus')}<div class="dialog-actions">${button('stop','cancel-challenge')}<button type="submit" class="primary">${t('submit')}</button></div></form>`,'challenge');
+	const input=document.querySelector('#verify-form input');
+	if(input)setTimeout(()=>input.focus(),50);
+	document.querySelector('#verify-form').onsubmit=event=>{
+		event.preventDefault();
+		const value=event.target.elements.response.value;
+		event.target.reset();
+		modal.close();
+		task(()=>call('SubmitChallenge',e.id,value));
+	};
+}
 
 /**
  * handleSaveProfile 统一处理线路配置保存：
@@ -213,6 +223,83 @@ app.addEventListener('dragend', () => {
 	document.querySelectorAll('.widget-shell').forEach(el => el.classList.remove('dragging', 'drag-over'));
 	draggedWidget = null;
 });
+
+// 首页组件拖拽右下角拉伸放大/缩小交互（无按键，直接手势拖拽缩放）
+let resizingWidget = null;
+let resizeStartX = 0;
+let resizeInitialSize = 'half';
+let resizeShell = null;
+
+app.addEventListener('pointerdown', e => {
+	const handle = e.target.closest('.widget-resize-handle');
+	if (!handle) return;
+	e.preventDefault();
+	e.stopPropagation();
+	resizingWidget = handle.dataset.resizeWidget;
+	resizeShell = handle.closest('.widget-shell');
+	if (!resizeShell) return;
+	resizeStartX = e.clientX;
+	const sizes = store.snapshot.preferences.widgetSizes || {};
+	const defaultSize = (resizingWidget === 'diag' || resizingWidget === 'logs') ? 'full' : 'half';
+	resizeInitialSize = sizes[resizingWidget] || defaultSize;
+	handle.classList.add('active');
+	resizeShell.classList.add('resizing');
+	if (handle.setPointerCapture) {
+		try { handle.setPointerCapture(e.pointerId); } catch (_) {}
+	}
+});
+
+app.addEventListener('pointermove', e => {
+	if (!resizingWidget || !resizeShell) return;
+	const dx = e.clientX - resizeStartX;
+	if (resizeInitialSize === 'half' && dx > 40) {
+		resizeShell.classList.remove('size-half');
+		resizeShell.classList.add('size-full');
+	} else if (resizeInitialSize === 'full' && dx < -40) {
+		resizeShell.classList.remove('size-full');
+		resizeShell.classList.add('size-half');
+	} else {
+		resizeShell.classList.toggle('size-full', resizeInitialSize === 'full');
+		resizeShell.classList.toggle('size-half', resizeInitialSize === 'half');
+	}
+});
+
+const finishResize = (e) => {
+	if (!resizingWidget || !resizeShell) return;
+	const dx = e.clientX - resizeStartX;
+	let newSize = resizeInitialSize;
+	if (resizeInitialSize === 'half' && dx > 40) {
+		newSize = 'full';
+	} else if (resizeInitialSize === 'full' && dx < -40) {
+		newSize = 'half';
+	} else if (Math.abs(dx) <= 6) {
+		// 单击手柄也可快速双向切换，方便快捷
+		newSize = resizeInitialSize === 'full' ? 'half' : 'full';
+	}
+
+	const w = resizingWidget;
+	const handle = resizeShell.querySelector('.widget-resize-handle');
+	if (handle) {
+		handle.classList.remove('active');
+		if (handle.releasePointerCapture && e.pointerId) {
+			try { handle.releasePointerCapture(e.pointerId); } catch (_) {}
+		}
+	}
+	resizeShell.classList.remove('resizing');
+	resizingWidget = null;
+	resizeShell = null;
+
+	if (newSize !== resizeInitialSize) {
+		const sizes = { ...(store.snapshot.preferences.widgetSizes || {}) };
+		sizes[w] = newSize;
+		task(() => call('SavePreferences', { ...store.snapshot.preferences, widgetSizes: sizes }));
+	} else {
+		render();
+	}
+};
+
+app.addEventListener('pointerup', finishResize);
+app.addEventListener('pointercancel', finishResize);
 modal.addEventListener('cancel',e=>{if(modal.dataset.kind==='challenge'){e.preventDefault();task(async()=>{await call('Disconnect');modal.close();});}});
 window.addEventListener('hashchange',()=>{render();document.querySelector('#main').focus({preventScroll:true});});
 // Only snapshots update on polling; an editor draft is never replaced by background events.

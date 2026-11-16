@@ -117,7 +117,7 @@ export function settings(section='',result=null){
 		</div>`;
 
 	if(section==='about') content = `
-		<div class="about-brand">CampusWay<span>${t('version')} · ${esc(result?.current||'0.1.1')}</span></div>
+		<div class="about-brand">CampusWay<span>${t('version')} · ${esc(result?.current||'0.1.2')}</span></div>
 		<p class="section-description">${t('releaseSource')}</p>
 		${button('check','check')}
 		<p role="status">${result?esc(message(result.status)+(result.latest?' ('+result.latest+')':'')):''}</p>`;

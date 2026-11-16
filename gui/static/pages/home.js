@@ -53,25 +53,22 @@ export function home() {
 			const currentSize = widgetSizes[w] || defaultSize;
 			const isFull = currentSize === 'full';
 
-			// 工具栏：包括大小切换按钮（全宽/半宽），编辑模式下还包含上移、下移、隐藏
-			const sizeBtn = iconButton(isFull ? 'minimize-2' : 'maximize-2', 'toggle-widget-size', isFull ? 'shrinkWidget' : 'expandWidget', `data-widget="${w}"`);
+			// 编辑模式下工具条：支持上移、下移、隐藏组件（删除按键放大，统一使用拖拽缩放）
 			const tools = store.homeEdit ? `
 				<div class="widget-tools">
-					${sizeBtn}
 					${iconButton('arrow-up', 'move-widget-up', 'moveUp', `data-widget="${w}" ${isFirst ? 'disabled' : ''}`)}
 					${iconButton('arrow-down', 'move-widget-down', 'moveDown', `data-widget="${w}" ${isLast ? 'disabled' : ''}`)}
 					${iconButton('eye-off', 'hide-widget', 'hideWidget', `data-widget="${w}"`)}
 				</div>
-			` : `
-				<div class="widget-tools hover-only">
-					${sizeBtn}
-				</div>
-			`;
+			` : '';
 
 			return `
-				<div class="widget-shell size-${currentSize} ${store.homeEdit ? 'editing' : ''}" draggable="true" data-widget="${w}">
+				<div class="widget-shell size-${currentSize} ${store.homeEdit ? 'editing' : ''}" draggable="${store.homeEdit ? 'true' : 'false'}" data-widget="${w}">
 					${tools}
 					<div id="${id}">${renderedModules[id]}</div>
+					<div class="widget-resize-handle" data-resize-widget="${w}" title="${t('dragToResize')}" role="separator" aria-orientation="horizontal">
+						<svg class="resize-icon" viewBox="0 0 16 16"><path d="M14 14L14 8M14 14L8 14M14 14L6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+					</div>
 				</div>
 			`;
 		})

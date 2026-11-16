@@ -122,6 +122,7 @@ func trayWndProc(hwnd windows.HWND, uMsg uint32, wParam uintptr, lParam uintptr)
 			// Click tray icon to show window
 			runtime.WindowUnminimise(globalTray.ctx)
 			runtime.WindowShow(globalTray.ctx)
+			applyWindowIcons()
 			return 0
 		case wmRButtonUp:
 			globalTray.showContextMenu()
@@ -183,7 +184,13 @@ func (t *systemTray) showContextMenu() {
 func (t *systemTray) runMessageLoop() {
 	className, _ := windows.UTF16PtrFromString("CampusWayTrayClass")
 	hInstance, _, _ := procGetModuleHandleW.Call(0)
-	hIcon, _, _ := procLoadIconW.Call(0, idiApplication)
+	h16, _ := ensureIconFiles()
+	var hIcon uintptr
+	if h16 != 0 {
+		hIcon = uintptr(h16)
+	} else {
+		hIcon, _, _ = procLoadIconW.Call(0, idiApplication)
+	}
 
 	var wc wndClassEx
 	wc.cbSize = uint32(unsafe.Sizeof(wc))

@@ -689,11 +689,12 @@ func (s *AppServer) readChild(cmd *exec.Cmd, out io.Reader, done chan struct{}) 
 	scanner.Buffer(make([]byte, 4096), 2*1024*1024)
 	for scanner.Scan() {
 		raw := scanner.Text()
-		if !strings.HasPrefix(raw, eventPrefix) {
+		idx := strings.Index(raw, eventPrefix)
+		if idx < 0 {
 			continue
 		}
 		var e Event
-		if json.Unmarshal([]byte(strings.TrimPrefix(raw, eventPrefix)), &e) != nil {
+		if json.Unmarshal([]byte(strings.TrimSpace(raw[idx+len(eventPrefix):])), &e) != nil {
 			continue
 		}
 		s.mu.Lock()

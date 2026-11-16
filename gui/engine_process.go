@@ -74,7 +74,7 @@ func runEngine() {
 		outputMu.Lock()
 		defer outputMu.Unlock()
 		b, _ := json.Marshal(e)
-		fmt.Fprintln(os.Stdout, eventPrefix+string(b))
+		fmt.Fprintf(os.Stdout, "\n%s%s\n", eventPrefix, string(b))
 	}
 
 	// 接管标准库与核心引擎日志输出管道，进行脱敏后实时通过 Event 上报前端
@@ -107,12 +107,14 @@ func runEngine() {
 	}()
 	authinput.Handler = func(kind string, data []byte) (string, error) {
 		id := identifier()
+		stdlog.Printf("[认证验证] 网关要求输入: %s，正在等待客户端输入...", kind)
 		e := Event{Kind: "challenge", ID: id, Message: "Enter the " + kind + " requested by your gateway"}
 		if len(data) > 0 && len(data) < 1024*1024 {
 			mime := http.DetectContentType(data)
-			if strings.HasPrefix(mime, "image/") {
-				e.Image = "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data)
+			if !strings.HasPrefix(mime, "image/") {
+				mime = "image/jpeg"
 			}
+			e.Image = "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data)
 		}
 		emit(e)
 		for {
