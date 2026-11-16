@@ -54,22 +54,44 @@ function edit(profile){
 	editorProfile=profile?structuredClone(profile):{};
 	go('editor');
 }
-async function start(p=selected(),automatic=false){if(!p)return edit();if(p.id===store.snapshot.active)return automatic?undefined:task(()=>call('Disconnect'));if(!p.username&&!store.snapshot.preview){toast('saveFirst');return edit(p);}const run=()=>{if(p.hasPassword||store.snapshot.preview||(p.protocol==='atrust'&&p.options?.authType==='auth/smsCheckCode'))return task(()=>call('Connect',p.id,'',false));dialog('auth',`<form id="password-form">${field('password','password','','password','required autocomplete="new-password"')}<label class="check"><input type="checkbox" name="remember" ${p.remember!==false?'checked':''} ${store.snapshot.canRemember?'':'disabled'}>${t('remember')}</label><div class="dialog-actions">${button('cancel','close')}<button class="primary" type="submit">${t('connect')}</button></div></form>`);document.querySelector('#password-form').onsubmit=e=>{e.preventDefault();const value=e.target.elements.password.value;const remember=e.target.elements.remember?.checked||false;e.target.reset();modal.close();task(()=>call('Connect',p.id,value,remember));};};if(store.snapshot.active&&!automatic){dialog('switchConfirm',`<div class="dialog-actions">${button('cancel','close')}${button('confirm','confirm','primary')}</div>`);modal.querySelector('[data-action=confirm]').onclick=()=>{modal.close();run();};}else run();}
+async function start(p=selected(),automatic=false){if(!p)return edit();if(p.id===store.snapshot.active)return automatic?undefined:task(()=>call('Disconnect'));if(!p.username&&!store.snapshot.preview){toast('saveFirst');return edit(p);}const run=async()=>{if(p.hasPassword||p.remember||store.snapshot.preview||(p.protocol==='atrust'&&p.options?.authType==='auth/smsCheckCode')){try{await task(()=>call('Connect',p.id,'',false));return;}catch(err){if(!err?.message?.toLowerCase().includes('password'))return;}}dialog('auth',`<form id="password-form">${field('password','password','','password','required autocomplete="current-password" autofocus')}<label class="check"><input type="checkbox" name="remember" checked ${store.snapshot.canRemember?'':'disabled'}>${t('remember')}</label><div class="dialog-actions">${button('cancel','close')}<button class="primary" type="submit">${t('connect')}</button></div></form>`);const inp=document.querySelector('#password-form input[type=password]');if(inp)setTimeout(()=>inp.focus(),50);document.querySelector('#password-form').onsubmit=e=>{e.preventDefault();const value=e.target.elements.password.value;const remember=e.target.elements.remember?.checked??true;e.target.reset();modal.close();task(()=>call('Connect',p.id,value,remember));};};if(store.snapshot.active&&!automatic){dialog('switchConfirm',`<div class="dialog-actions">${button('cancel','close')}${button('confirm','confirm','primary')}</div>`);modal.querySelector('[data-action=confirm]').onclick=()=>{modal.close();run();};}else run();}
 // Selecting a running route is idempotent; credentials are obtained before the old worker stops.
 async function chooseRoute(id){if(store.busy||store.snapshot.active===id)return;const p=store.snapshot.profiles.find(p=>p.id===id);if(!p)return;let ready=false;await task(async()=>{await call('SelectProfile',id);ready=true;});if(ready)await start(p,true);}
 
 function verification(e){
 	const imgHtml = e.image ? `<div style="text-align:center;margin:14px 0;"><img class="challenge-image" src="${esc(e.image)}" alt="${t('verify')}" style="max-height:90px;border-radius:6px;border:1px solid var(--line);background:#fff;padding:2px;"></div>` : '';
-	dialog('verify',`<p>${t('verifyHint')}</p>${imgHtml}<form id="verify-form">${field('response','response','','text','required autocomplete="one-time-code" autofocus')}<div class="dialog-actions">${button('stop','cancel-challenge')}<button type="submit" class="primary">${t('submit')}</button></div></form>`,'challenge');
-	const input=document.querySelector('#verify-form input');
+	dialog('verify',`<p>${t('verifyHint')}</p>${imgHtml}<form id="verify-form">${field('response','response','','text','required autocomplete="one-time-code" autofocus')}<div class="dialog-actions">${button('stop','cancel-challenge')}<button type="submit" id="submit-verify-btn" class="primary">${t('submit')}</button></div></form>`,'challenge');
+	const form=document.querySelector('#verify-form');
+	const input=form?.querySelector('input');
+	const submitBtn=form?.querySelector('#submit-verify-btn');
 	if(input)setTimeout(()=>input.focus(),50);
-	document.querySelector('#verify-form').onsubmit=event=>{
-		event.preventDefault();
-		const value=event.target.elements.response.value;
-		event.target.reset();
+
+	const doSubmit=async()=>{
+		const value=(input?.value||'').trim();
+		if(!value)return;
+		if(submitBtn)submitBtn.disabled=true;
 		modal.close();
-		task(()=>call('SubmitChallenge',e.id,value));
+		challengeID='';
+		try{
+			await call('SubmitChallenge',e.id,value);
+			await refresh();
+		}catch(err){
+			toast(err.message||String(err));
+		}
 	};
+
+	if(form){
+		form.onsubmit=event=>{
+			event.preventDefault();
+			doSubmit();
+		};
+	}
+	if(submitBtn){
+		submitBtn.onclick=event=>{
+			event.preventDefault();
+			doSubmit();
+		};
+	}
 }
 
 /**

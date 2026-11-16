@@ -301,10 +301,35 @@ func (s *Session) Login(method LoginMethod, opts LoginOptions) (LoginResult, err
 		return LoginResult{}, fmt.Errorf("login method is nil, but user is not logged in")
 	}
 	var foundAuthInfo *AuthInfo
+	// 1. 先进行精确匹配与大小写无关匹配
 	for _, authInfo := range authInfoList {
-		if authInfo.AuthType == method.AuthType() && authInfo.LoginDomain == method.LoginDomain() {
-			foundAuthInfo = &authInfo
+		if authInfo.AuthType == method.AuthType() && strings.EqualFold(authInfo.LoginDomain, method.LoginDomain()) {
+			cpy := authInfo
+			foundAuthInfo = &cpy
 			break
+		}
+	}
+	// 2. 如果未指定 LoginDomain，或找不到指定域，则智能推导相同 AuthType 的最适合认证项
+	if foundAuthInfo == nil {
+		var fallbackNonLocal *AuthInfo
+		var fallbackAny *AuthInfo
+		for _, authInfo := range authInfoList {
+			if authInfo.AuthType == method.AuthType() {
+				if fallbackAny == nil {
+					cpy := authInfo
+					fallbackAny = &cpy
+				}
+				// 优先选用非 local（如 Radius、统一认证、上网账号等）
+				if !strings.EqualFold(authInfo.LoginDomain, "local") && fallbackNonLocal == nil {
+					cpy := authInfo
+					fallbackNonLocal = &cpy
+				}
+			}
+		}
+		if fallbackNonLocal != nil {
+			foundAuthInfo = fallbackNonLocal
+		} else if fallbackAny != nil {
+			foundAuthInfo = fallbackAny
 		}
 	}
 	if foundAuthInfo == nil {
@@ -312,7 +337,7 @@ func (s *Session) Login(method LoginMethod, opts LoginOptions) (LoginResult, err
 		return LoginResult{}, fmt.Errorf("auth type/login domain combination not found: auth type: %s, login domain: %s", method.AuthType(), method.LoginDomain())
 	}
 
-	log.Printf("Starting login with auth type: %s, login domain: %s", method.AuthType(), method.LoginDomain())
+	log.Printf("Starting login with auth type: %s, login domain: %s (auth name: %s)", foundAuthInfo.AuthType, foundAuthInfo.LoginDomain, foundAuthInfo.AuthName)
 	err = method.login(s, *foundAuthInfo)
 	if err != nil {
 		return LoginResult{}, err

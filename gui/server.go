@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"os"
 	"os/exec"
@@ -593,12 +594,12 @@ func (s *AppServer) Connect(id, password string, remember bool) error {
 		s.mu.Unlock()
 		return errors.New("This profile is already running")
 	}
-	if password == "" && p.HasPassword {
-		var err error
-		password, err = loadCredential(s.secretPath(id))
-		if err != nil {
-			s.mu.Unlock()
-			return errors.New("Saved password could not be opened; enter it again")
+	// 无论内存标记为何值，只要空密码连接，主动探测本地是否有该线路的已存密码
+	if password == "" {
+		if pwd, err := loadCredential(s.secretPath(id)); err == nil && pwd != "" {
+			password = pwd
+			p.HasPassword = true
+			p.Remember = true
 		}
 	}
 	if password == "" && !(p.Protocol == "atrust" && p.Options.AuthType == "auth/smsCheckCode") {
@@ -710,7 +711,8 @@ func (s *AppServer) readChild(cmd *exec.Cmd, out io.Reader, done chan struct{}) 
 					s.connectedAt = time.Now().UnixMilli()
 				}
 			case "challenge":
-				s.challenge = &e
+				challengeCopy := e
+				s.challenge = &challengeCopy
 				s.record("awaiting_auth", e.Message)
 			case "log":
 				s.warn(e.Message)
@@ -776,17 +778,27 @@ func (s *AppServer) Disconnect() error {
 func (s *AppServer) SubmitChallenge(id, response string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.challenge == nil || s.challenge.ID != id || s.input == nil {
+	if s.input == nil {
+		return errors.New("Connection engine is not running")
+	}
+	if s.challenge == nil {
 		return errors.New("This verification request has expired")
 	}
-	if len(response) == 0 || len(response) > 8192 {
+	targetID := s.challenge.ID
+	if id != "" && s.challenge.ID != "" && s.challenge.ID != id {
+		return errors.New("This verification request has expired")
+	}
+	trimmed := strings.TrimSpace(response)
+	if len(trimmed) == 0 || len(trimmed) > 8192 {
 		return errors.New("Enter a valid verification response")
 	}
-	if err := json.NewEncoder(s.input).Encode(engineCommand{Kind: "answer", ID: id, Answer: response}); err != nil {
+	log.Printf("[认证提交] 正在向引擎提交验证结果 (ID: %s, 字符数: %d)", targetID, len(trimmed))
+	if err := json.NewEncoder(s.input).Encode(engineCommand{Kind: "answer", ID: targetID, Answer: trimmed}); err != nil {
+		log.Printf("[认证提交] 写入标准输入失败: %v", err)
 		return err
 	}
 	s.challenge = nil
-	s.record("connecting", "Verifying your response")
+	s.record("connecting", "正在验证网关验证码并建立连接...")
 	return nil
 }
 func (s *AppServer) SetLayout(manager bool) {
