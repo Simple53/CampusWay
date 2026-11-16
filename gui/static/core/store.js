@@ -1,4 +1,4 @@
-export const store={snapshot:{profiles:[],preferences:{accent:'graphite',language:'zh-CN',theme:'system',view:'grid',density:'compact',sort:'default',widgets:['status','speed','diag','logs']},state:'disconnected',logs:[],canRemember:true},query:'',busy:false,diagReport:null,diagTesting:false};
+export const store={snapshot:{profiles:[],preferences:{accent:'graphite',language:'zh-CN',theme:'system',view:'grid',density:'compact',sort:'default',widgets:['status','speed','diag','logs']},state:'disconnected',logs:[],canRemember:true},query:'',busy:false,diagReport:null,diagTesting:false,speedHistory:[],homeEdit:false};
 export const selected=()=>store.snapshot.profiles.find(p=>p.id===store.snapshot.selected)||store.snapshot.profiles[0];
 export const active=()=>store.snapshot.profiles.find(p=>p.id===store.snapshot.active);
 export const running=()=>!!store.snapshot.active;

@@ -68,6 +68,7 @@ export function settings(section='',result=null){
 				${select('language','language',p.language||'zh-CN',[['zh-CN','简体中文'],['en','English']])}
 				${select('view','view',p.view,[['grid','grid'],['table','table']])}
 				${select('sort','sort',p.sort,[['default','default'],['name','name']])}
+				${select('closeBehavior','closeAction',p.closeAction||'minimize',[['minimize','closeToTray'],['exit','closeDirectly']])}
 			</div>
 		</section>
 
@@ -116,7 +117,7 @@ export function settings(section='',result=null){
 		</div>`;
 
 	if(section==='about') content = `
-		<div class="about-brand">CampusWay<span>${t('version')} · ${esc(result?.current||'0.1.0')}</span></div>
+		<div class="about-brand">CampusWay<span>${t('version')} · ${esc(result?.current||'0.1.1')}</span></div>
 		<p class="section-description">${t('releaseSource')}</p>
 		${button('check','check')}
 		<p role="status">${result?esc(message(result.status)+(result.latest?' ('+result.latest+')':'')):''}</p>`;
@@ -127,7 +128,7 @@ export function settings(section='',result=null){
 			${button('copy','copy-logs')}
 			${button('download','export-logs')}
 		</div>
-		${s.logs.length?`<ol class="event-list">${s.logs.slice().reverse().map(l=>`<li><time>${clock(l.time)}</time><span>${esc(message(l.message))}</span></li>`).join('')}</ol>`:`<div class="empty">${t('noLogs')}</div>`}`;
+		${s.logs.length?`<ol class="event-list" style="font-family:var(--font-mono, 'Consolas', monospace);font-size:12px;">${s.logs.slice().reverse().map(l=>`<li><time style="flex-shrink:0;">${clock(l.time)}</time><span style="word-break:break-all;user-select:text;">${esc(message(l.message))}</span></li>`).join('')}</ol>`:`<div class="empty">${t('noLogs')}</div>`}`;
 
 	return `<a class="back-link" href="#settings">${icon('arrow-right')} ${t('back')}</a>
 		<div class="page-heading"><h1>${t(section)}</h1></div>

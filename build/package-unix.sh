@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 platform="$1"
-version="${2:-${RELEASE_VERSION:-0.1.0}}"
+version="${2:-${RELEASE_VERSION:-0.1.1}}"
 version="${version#v}"
 if [[ "${GITHUB_REF_TYPE:-}" == tag ]]; then version="${GITHUB_REF_NAME#v}"; fi
 [[ "$version" =~ ^[0-9A-Za-z.-]+$ ]] || exit 2

@@ -47,13 +47,15 @@ type Profile struct {
 	HasPassword   bool              `json:"hasPassword"`
 }
 type Preferences struct {
-	Accent   string   `json:"accent"`
-	Language string   `json:"language"`
-	Theme    string   `json:"theme"`
-	View     string   `json:"view"`
-	Density  string   `json:"density"`
-	Sort     string   `json:"sort"`
-	Widgets  []string `json:"widgets,omitempty"`
+	Accent      string            `json:"accent"`
+	Language    string            `json:"language"`
+	Theme       string            `json:"theme"`
+	View        string            `json:"view"`
+	Density     string            `json:"density"`
+	Sort        string            `json:"sort"`
+	Widgets     []string          `json:"widgets"`
+	WidgetSizes map[string]string `json:"widgetSizes"`
+	CloseAction string            `json:"closeAction"`
 }
 type storedConfig struct {
 	Version     int         `json:"version"`
@@ -111,10 +113,11 @@ type AppServer struct {
 	cancelled              bool
 	startupErr             error
 	resize                 func(bool)
+	minimize               func()
 }
 
 func newAppAt(dir string) *AppServer {
-	s := &AppServer{dir: dir, state: "disconnected", message: "Ready to connect", config: storedConfig{Version: 1, Profiles: []Profile{}, Preferences: Preferences{Accent: "graphite", Language: "zh-CN", Theme: "system", View: "grid", Density: "compact", Sort: "default"}}, logs: []LogEntry{}}
+	s := &AppServer{dir: dir, state: "disconnected", message: "Ready to connect", config: storedConfig{Version: 1, Profiles: []Profile{}, Preferences: Preferences{Accent: "graphite", Language: "zh-CN", Theme: "system", View: "grid", Density: "compact", Sort: "default", Widgets: []string{"status", "speed", "diag", "logs"}, WidgetSizes: map[string]string{}, CloseAction: "minimize"}}, logs: []LogEntry{}}
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		s.startupErr = err
 		return s
@@ -321,7 +324,8 @@ func (s *AppServer) SaveProfile(p Profile, password string) (Profile, error) {
 	if p.ID == s.active && s.cmd != nil {
 		return Profile{}, errors.New("Disconnect before editing the active profile")
 	}
-	changed := index >= 0 && (c.Profiles[index].Server != p.Server || c.Profiles[index].Port != p.Port || c.Profiles[index].Username != p.Username || c.Profiles[index].Protocol != p.Protocol || c.Profiles[index].Options.LoginDomain != p.Options.LoginDomain || (c.Profiles[index].Options.AuthType != "" && c.Profiles[index].Options.AuthType != p.Options.AuthType))
+	serverChanged := index >= 0 && c.Profiles[index].Server != p.Server
+	changed := index >= 0 && (serverChanged || c.Profiles[index].Port != p.Port || c.Profiles[index].Username != p.Username || c.Profiles[index].Protocol != p.Protocol || c.Profiles[index].Options.LoginDomain != p.Options.LoginDomain || (c.Profiles[index].Options.AuthType != "" && c.Profiles[index].Options.AuthType != p.Options.AuthType))
 	oldID := ""
 	if index >= 0 {
 		oldID = c.Profiles[index].ID
@@ -331,15 +335,30 @@ func (s *AppServer) SaveProfile(p Profile, password string) (Profile, error) {
 		p.ID = identifier()
 	}
 	p.HasPassword = false
-	if p.Remember {
+	if p.Remember || password != "" {
+		p.Remember = true
 		if password == "" && !changed && index >= 0 {
 			p.HasPassword = c.Profiles[index].HasPassword
+		}
+		if password == "" && changed && !serverChanged && index >= 0 && c.Profiles[index].HasPassword {
+			// 网关未改变（如修改了账号、端口或选项）且密码留空保留，则安全迁移旧凭据至新槽位
+			if oldSecret, err := loadCredential(s.secretPath(oldID)); err == nil && oldSecret != "" {
+				if err := saveCredential(s.secretPath(p.ID), oldSecret); err == nil {
+					p.HasPassword = true
+				}
+			}
 		}
 		if password != "" {
 			if err := saveCredential(s.secretPath(p.ID), password); err != nil {
 				return Profile{}, err
 			}
-			p.HasPassword = true
+			// DPAPI 加密即时回读校验
+			if got, err := loadCredential(s.secretPath(p.ID)); err == nil && got == password {
+				p.HasPassword = true
+			} else {
+				_ = deleteCredential(s.secretPath(p.ID))
+				return Profile{}, errors.New("stored credential failed verification")
+			}
 		}
 	}
 	if !p.Remember && oldID != "" {
@@ -432,9 +451,36 @@ func (s *AppServer) SavePreferences(p Preferences) error {
 	if !oneOf(p.Theme, "system", "light", "dark") || !oneOf(p.View, "table", "grid") || !oneOf(p.Density, "comfortable", "standard", "compact", "ultra-compact") || !oneOf(p.Sort, "default", "name") {
 		return errors.New("Invalid display preferences")
 	}
-	if len(p.Widgets) == 0 {
+	if p.CloseAction == "" {
+		p.CloseAction = "minimize"
+	}
+	if !oneOf(p.CloseAction, "minimize", "exit") {
+		return errors.New("Invalid close action")
+	}
+	if p.WidgetSizes == nil {
+		p.WidgetSizes = map[string]string{}
+	}
+	cleanSizes := map[string]string{}
+	for k, v := range p.WidgetSizes {
+		if oneOf(k, "status", "speed", "diag", "logs") && oneOf(v, "half", "full") {
+			cleanSizes[k] = v
+		}
+	}
+	p.WidgetSizes = cleanSizes
+	// nil means "never customised" (show everything); an empty list is a valid
+	// choice and hides every widget. Unknown ids and duplicates are dropped.
+	if p.Widgets == nil {
 		p.Widgets = []string{"status", "speed", "diag", "logs"}
 	}
+	seen := map[string]bool{}
+	clean := []string{}
+	for _, w := range p.Widgets {
+		if oneOf(w, "status", "speed", "diag", "logs") && !seen[w] {
+			seen[w] = true
+			clean = append(clean, w)
+		}
+	}
+	p.Widgets = clean
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	c := s.config
@@ -445,6 +491,17 @@ func (s *AppServer) SavePreferences(p Preferences) error {
 	s.config = c
 	return nil
 }
+// MinimizeWindow 响应前端最小化按钮操作，将窗口最小化或隐藏至托盘
+func (s *AppServer) MinimizeWindow() error {
+	s.mu.Lock()
+	fn := s.minimize
+	s.mu.Unlock()
+	if fn != nil {
+		fn()
+	}
+	return nil
+}
+
 func oneOf(v string, choices ...string) bool {
 	for _, c := range choices {
 		if v == c {
@@ -476,6 +533,42 @@ func (s *AppServer) record(state, message string) {
 		s.logs = s.logs[len(s.logs)-500:]
 	}
 }
+// rememberPassword stores the credential with DPAPI, reads it back to prove the
+// round trip works, and only then flips the profile flags on disk.
+// The caller must hold s.mu.
+func (s *AppServer) rememberPassword(id, password string) error {
+	if err := saveCredential(s.secretPath(id), password); err != nil {
+		return err
+	}
+	if got, err := loadCredential(s.secretPath(id)); err != nil || got != password {
+		_ = deleteCredential(s.secretPath(id))
+		return errors.New("stored credential failed verification")
+	}
+	next := s.config
+	next.Profiles = append([]Profile{}, s.config.Profiles...)
+	for i := range next.Profiles {
+		if next.Profiles[i].ID == id {
+			next.Profiles[i].Remember, next.Profiles[i].HasPassword = true, true
+			if err := s.persist(next); err != nil {
+				return err
+			}
+			s.config = next
+			return nil
+		}
+	}
+	return errors.New("Profile no longer exists")
+}
+
+// warn appends an event-log line without touching the connection state.
+// The caller must hold s.mu.
+func (s *AppServer) warn(message string) {
+	s.seq++
+	s.logs = append(s.logs, LogEntry{s.seq, time.Now().Format(time.RFC3339), message})
+	if len(s.logs) > 500 {
+		s.logs = s.logs[len(s.logs)-500:]
+	}
+}
+
 func (s *AppServer) Connect(id, password string, remember bool) error {
 	if !s.operation.TryLock() {
 		return errors.New("Another connection operation is in progress")
@@ -513,19 +606,14 @@ func (s *AppServer) Connect(id, password string, remember bool) error {
 		return errors.New("Enter your password")
 	}
 
-	// Persist password locally if requested or if profile is configured to remember
+	// Persist the password when the user asked for it (dialog checkbox) or the
+	// profile already opted in. A failure never blocks the connection, but it is
+	// recorded in the event log so the user can see why nothing was remembered.
 	if password != "" && (remember || p.Remember) && canRemember() {
-		if err := saveCredential(s.secretPath(id), password); err == nil {
-			for i := range s.config.Profiles {
-				if s.config.Profiles[i].ID == id {
-					s.config.Profiles[i].Remember = true
-					s.config.Profiles[i].HasPassword = true
-					p.Remember = true
-					p.HasPassword = true
-					_ = s.persist(s.config)
-					break
-				}
-			}
+		if err := s.rememberPassword(id, password); err != nil {
+			s.warn("Password could not be saved on this device")
+		} else {
+			p.Remember, p.HasPassword = true, true
 		}
 	}
 
@@ -548,7 +636,12 @@ func (s *AppServer) Connect(id, password string, remember bool) error {
 		in.Close()
 		return err
 	}
-	cmd.Stderr = io.Discard
+	errPipe, err := cmd.StderrPipe()
+	if err != nil {
+		in.Close()
+		out.Close()
+		return err
+	}
 	if err = cmd.Start(); err != nil {
 		in.Close()
 		out.Close()
@@ -564,15 +657,33 @@ func (s *AppServer) Connect(id, password string, remember bool) error {
 	s.challenge = nil
 	s.connectedAt = 0
 	s.traffic = nil
-	s.record("connecting", "Connecting to "+p.Name)
+	s.record("connecting", fmt.Sprintf("正在连接网关: %s (%s, 协议: %s)", p.Name, p.Server, p.Protocol))
 	s.mu.Unlock()
 	go s.readChild(cmd, out, done)
+	go s.readStderr(cmd, errPipe)
 	if err = json.NewEncoder(in).Encode(engineRequest{Profile: p, Password: password}); err != nil {
 		_ = cmd.Process.Kill()
 		return errors.New("Could not initialize the connection process")
 	}
 	return nil
 }
+
+// readStderr 读取引擎子进程的错误输出，并将每一行作为告警日志存入内存日志缓冲区
+func (s *AppServer) readStderr(cmd *exec.Cmd, r io.Reader) {
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		s.mu.Lock()
+		if s.cmd == cmd && !s.cancelled {
+			s.warn("[stderr] " + line)
+		}
+		s.mu.Unlock()
+	}
+}
+
 func (s *AppServer) readChild(cmd *exec.Cmd, out io.Reader, done chan struct{}) {
 	scanner := bufio.NewScanner(out)
 	scanner.Buffer(make([]byte, 4096), 2*1024*1024)
@@ -600,6 +711,8 @@ func (s *AppServer) readChild(cmd *exec.Cmd, out io.Reader, done chan struct{}) 
 			case "challenge":
 				s.challenge = &e
 				s.record("awaiting_auth", e.Message)
+			case "log":
+				s.warn(e.Message)
 			}
 		}
 		s.mu.Unlock()

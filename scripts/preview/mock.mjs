@@ -2,7 +2,7 @@
 // Passwords and verification responses are discarded; timers never contact a gateway.
 export function createPreviewBridge({delay=900,onChange=()=>{}}={}){
  let serial=0,generation=0,outcome='success';
- const defaults=()=>({profiles:[],preferences:{accent:'graphite',language:'zh-CN',theme:'system',view:'grid',density:'compact',sort:'default'},selected:'',active:'',state:'disconnected',message:'ready',connectedAt:0,challenge:null,logs:[],traffic:null,canRemember:false,preview:true});
+ const defaults=()=>({profiles:[],preferences:{accent:'graphite',language:'zh-CN',theme:'system',view:'grid',density:'compact',sort:'default',closeAction:'minimize',widgetSizes:{}},selected:'',active:'',state:'disconnected',message:'ready',connectedAt:0,challenge:null,logs:[],traffic:null,canRemember:false,preview:true});
  let state=defaults();
  const clone=x=>structuredClone(x),emit=(status,message)=>{state.state=status;state.message=message;state.logs.push({seq:++serial,time:new Date().toISOString(),message});state.logs=state.logs.slice(-100);onChange();};
  const after=(fn)=>{const ticket=generation;setTimeout(()=>{if(ticket===generation)fn();},delay);};
@@ -27,7 +27,8 @@ export function createPreviewBridge({delay=900,onChange=()=>{}}={}){
  SubmitChallenge:async(id,_discardedResponse)=>{if(state.challenge?.id!==id)throw new Error('验证码已过期');state.challenge=null;emit('connecting','connectingEvent');after(connected);},
  ForgetPassword:async id=>{const p=profile(id);p.hasPassword=false;p.remember=false;},
  RunDiagnostics:async()=>({targets:[{name:'教务系统 (JWGL)',url:'http://jwgl.njnu.edu.cn',ok:true,ms:42},{name:'办事大厅 (E-Hall)',url:'https://ehallapp.nnu.edu.cn',ok:true,ms:68},{name:'中国知网 (CNKI)',url:'https://www.cnki.net',ok:true,ms:95},{name:'公共网关 (Baidu)',url:'https://www.baidu.com',ok:true,ms:35}],localIP:'10.12.34.56',dns:'127.0.0.1:53'}),
- CheckVersion:async()=>({current:'0.1.0-preview',latest:'v0.1.0',status:'You are on the latest release'}),
+ CheckVersion:async()=>({current:'0.1.1-preview',latest:'v0.1.1',status:'You are on the latest release'}),
+ MinimizeWindow:async()=>{},
  ExportData:async()=>JSON.stringify({version:1,profiles:state.profiles.map(p=>({...clone(p),username:'',remember:false,hasPassword:false})),preferences:state.preferences},null,2),
  ImportData:async data=>{if(data.length>1024*1024)throw new Error('文件超过 1 MB');const input=JSON.parse(data);if(input.version!==1||!Array.isArray(input.profiles)||input.profiles.length>100)throw new Error('配置文件格式不正确');const imported=input.profiles.map(p=>{if(!p.name||!p.server||!['atrust','easyconnect'].includes(p.protocol)||!Number.isInteger(p.port)||p.port<1||p.port>65535)throw new Error('线路配置无效');return {id:crypto.randomUUID(),name:String(p.name).slice(0,80),server:String(p.server).slice(0,253),port:p.port,protocol:p.protocol,username:'',remember:false,hasPassword:false,customDomains:typeof p.customDomains==='string'?p.customDomains.slice(0,8192):'',options:p.options&&typeof p.options==='object'?clone(p.options):{}};});if(state.profiles.length+imported.length>100)throw new Error('最多导入 100 条线路');state.profiles.push(...imported);if(!state.selected)state.selected=imported[0]?.id||'';}
  };

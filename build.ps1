@@ -1,6 +1,6 @@
-param(
+﻿param(
     [string]$GoBin = "",
-    [string]$Version = "0.1.0",
+    [string]$Version = "0.1.1",
     [switch]$WithCLI
 )
 
@@ -32,7 +32,11 @@ New-Item -ItemType Directory -Force $out | Out-Null
 if ($LASTEXITCODE) { throw 'Desktop build failed' }
 
 # Copy to root directory for easy access
-Copy-Item "$out/CampusWay.exe" "$PSScriptRoot/CampusWay.exe" -Force
+try {
+    Copy-Item "$out/CampusWay.exe" "$PSScriptRoot/CampusWay.exe" -Force -ErrorAction Stop
+} catch {
+    Write-Host "提示: 根目录 CampusWay.exe 正被运行中的程序占用，最新编译产物已生成至: $out/CampusWay.exe" -ForegroundColor Yellow
+}
 
 Copy-Item LICENSE "$out/LICENSE"
 Copy-Item gui/static/icons/LICENSE "$out/ICON-LICENSE" -ErrorAction Stop
@@ -45,7 +49,11 @@ $hashTargets = @("$out/CampusWay.exe", $zip)
 if ($WithCLI) {
     & $GoBin build -buildvcs=false -ldflags "-s -w -X 'main.CommitID=$Version'" -o "$out/campusway-cli.exe" .
     if ($LASTEXITCODE) { throw 'CLI build failed' }
-    Copy-Item "$out/campusway-cli.exe" "$PSScriptRoot/campusway-cli.exe" -Force
+    try {
+        Copy-Item "$out/campusway-cli.exe" "$PSScriptRoot/campusway-cli.exe" -Force -ErrorAction Stop
+    } catch {
+        Write-Host "提示: 根目录 campusway-cli.exe 正被占用，最新 CLI 产物已生成至: $out/campusway-cli.exe" -ForegroundColor Yellow
+    }
     $cliZip = "$out/campusway-cli-$Version-windows-x64.zip"
     Compress-Archive -Force -Path "$out/campusway-cli.exe", "$out/LICENSE" -DestinationPath $cliZip
     $hashTargets += @("$out/campusway-cli.exe", $cliZip)

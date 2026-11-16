@@ -23,6 +23,7 @@ function render(){const scroll=document.querySelector('#main')?.scrollTop||0;con
    <div style="display:flex;align-items:center;gap:12px;">
      <span class="header-label">${s.preview?t('preview'):t('localProxy')}</span>
      ${activeRoute ? toggleSwitch(isRunning, 'toggle-global', `title="${t(isRunning?'disconnect':'connect')}"`) : ''}
+     <button type="button" class="icon-btn quiet" data-action="minimize-window" title="${t('minimize')}" aria-label="${t('minimize')}">${icon('minus')}</button>
    </div>
  </header>
  <main id="main" tabindex="-1">${page==='editor'?editor(editorProfile||{}):page==='connections'?connections():page==='settings'?settings(section,versionResult):home()}</main>
@@ -32,7 +33,15 @@ function elapsed(){document.querySelectorAll('[data-elapsed]').forEach(e=>{const
 function applyBusy(){document.querySelectorAll('button.primary, #editor button, [data-select], [data-action=edit-route]').forEach(e=>e.disabled=store.busy);app.setAttribute('aria-busy',String(store.busy));}
 async function refresh(force=false){const next=await call('GetSnapshot'),key=JSON.stringify(next),previous=store.snapshot;
  if(next.state==='error'&&previous.state!=='error')store.failedID=next.active||previous.active||next.selected;
- if(next.state!=='error')store.failedID='';store.snapshot=next;
+ if(next.state!=='error')store.failedID='';
+ // 收集连接期实时速率历史点供 SVG Sparkline 折线图使用（至多 25 个点，断开时重置）
+ if(next.state==='connected'&&next.traffic){
+  store.speedHistory.push({down:next.traffic.downloadRate||0,up:next.traffic.uploadRate||0});
+  if(store.speedHistory.length>25)store.speedHistory.shift();
+ }else if(next.state!=='connected'&&store.speedHistory.length>0){
+  store.speedHistory=[];
+ }
+ store.snapshot=next;
  if(force||key!==snapshotKey){const first=!snapshotKey;snapshotKey=key;const page=route()[0]||'home';
  const samePreferences=JSON.stringify(previous.preferences)===JSON.stringify(next.preferences);
  if(!first&&samePreferences&&page==='home')updateHome();else if(!first&&samePreferences&&page==='connections'&&document.querySelector('#route-list')){if(JSON.stringify([previous.profiles,previous.selected,previous.active,previous.state])!==JSON.stringify([next.profiles,next.selected,next.active,next.state]))document.querySelector('#route-list').innerHTML=routes();applyBusy();}else if(first||page!=='editor')render();}
@@ -41,17 +50,113 @@ async function refresh(force=false){const next=await call('GetSnapshot'),key=JSO
 async function task(fn){if(store.busy)return;store.busy=true;applyBusy();try{await fn();await refresh();}catch(e){toast(e.message);}finally{store.busy=false;applyBusy();}}
 function dialog(title,body,kind=''){if(modal.open)modal.close();modal.dataset.kind=kind;modal.innerHTML=`<div class="dialog-heading"><h2>${t(title)}</h2></div>${body}`;modal.showModal();}
 function confirmAction(title,fn){dialog(title,`<div class="dialog-actions">${button('cancel','close')}${button('confirm','confirm','primary')}</div>`);modal.querySelector('[data-action=confirm]').onclick=()=>{modal.close();task(fn);};}
-function edit(profile){if(profile?.id===store.snapshot.active)return toast('noEditActive');editorProfile=profile?structuredClone(profile):{};go('editor');}
+function edit(profile){
+	// 仅在当前线路真正处于已连接状态时才阻止编辑；断开或出错状态均允许直接配置
+	if(profile?.id===store.snapshot.active&&store.snapshot.state==='connected')return toast('noEditActive');
+	editorProfile=profile?structuredClone(profile):{};
+	go('editor');
+}
 async function start(p=selected(),automatic=false){if(!p)return edit();if(p.id===store.snapshot.active)return automatic?undefined:task(()=>call('Disconnect'));if(!p.username&&!store.snapshot.preview){toast('saveFirst');return edit(p);}const run=()=>{if(p.hasPassword||store.snapshot.preview||(p.protocol==='atrust'&&p.options?.authType==='auth/smsCheckCode'))return task(()=>call('Connect',p.id,'',false));dialog('auth',`<form id="password-form">${field('password','password','','password','required autocomplete="new-password"')}<label class="check"><input type="checkbox" name="remember" ${p.remember!==false?'checked':''} ${store.snapshot.canRemember?'':'disabled'}>${t('remember')}</label><div class="dialog-actions">${button('cancel','close')}<button class="primary" type="submit">${t('connect')}</button></div></form>`);document.querySelector('#password-form').onsubmit=e=>{e.preventDefault();const value=e.target.elements.password.value;const remember=e.target.elements.remember?.checked||false;e.target.reset();modal.close();task(()=>call('Connect',p.id,value,remember));};};if(store.snapshot.active&&!automatic){dialog('switchConfirm',`<div class="dialog-actions">${button('cancel','close')}${button('confirm','confirm','primary')}</div>`);modal.querySelector('[data-action=confirm]').onclick=()=>{modal.close();run();};}else run();}
 // Selecting a running route is idempotent; credentials are obtained before the old worker stops.
 async function chooseRoute(id){if(store.busy||store.snapshot.active===id)return;const p=store.snapshot.profiles.find(p=>p.id===id);if(!p)return;let ready=false;await task(async()=>{await call('SelectProfile',id);ready=true;});if(ready)await start(p,true);}
 
 function verification(e){dialog('verify',`<p>${t('verifyHint')}</p>${e.image?`<img class="challenge-image" src="${esc(e.image)}" alt="${t('verify')}">`:''}<form id="verify-form">${field('response','response','','text','required autocomplete="one-time-code"')}<div class="dialog-actions">${button('stop','cancel-challenge')}<button type="submit" class="primary">${t('submit')}</button></div></form>`,'challenge');document.querySelector('#verify-form').onsubmit=event=>{event.preventDefault();const value=event.target.elements.response.value;event.target.reset();modal.close();task(()=>call('SubmitChallenge',e.id,value));};}
-app.addEventListener('submit',e=>{if(e.target.id!=='editor')return;e.preventDefault();const form=e.target;task(async()=>{await call('SaveProfile',readProfile(form),form.elements.password.value);form.reset();editorProfile=null;go('connections');toast('savedNotice');});});
+
+/**
+ * handleSaveProfile 统一处理线路配置保存：
+ * 1. 无论是点击保存按钮、快捷回车还是表单 submit 均统一调用，保证即点即响应；
+ * 2. 在前端先行校验必填项并聚焦错误字段，提示明确且绝不静默吞掉操作；
+ * 3. 密码与账户持久化后返回线路列表并提示 savedNotice。
+ */
+async function handleSaveProfile(form){
+	const formEl=form||document.querySelector('#editor');
+	if(!formEl)return;
+	const username=(formEl.elements.username?.value||'').trim();
+	if(!username&&!store.snapshot.preview){
+		const inp=formEl.elements.username;
+		if(inp)inp.focus();
+		return toast('saveFirst');
+	}
+	const name=(formEl.elements.name?.value||'').trim();
+	if(!name){
+		const inp=formEl.elements.name;
+		if(inp)inp.focus();
+		return toast('required');
+	}
+	const server=(formEl.elements.server?.value||'').trim();
+	if(!server){
+		const inp=formEl.elements.server;
+		if(inp)inp.focus();
+		return toast('required');
+	}
+	const profileData=readProfile(formEl);
+	const passwordVal=formEl.elements.password?.value||'';
+	await task(async()=>{
+		await call('SaveProfile',profileData,passwordVal);
+		formEl.reset();
+		editorProfile=null;
+		go('connections');
+		toast('savedNotice');
+	});
+}
+
+app.addEventListener('submit',e=>{
+	if(e.target.id!=='editor')return;
+	e.preventDefault();
+	handleSaveProfile(e.target);
+});
 document.addEventListener('click',e=>{const target=e.target.closest('[data-action],[data-select],[data-accent]');if(!target)return;if(target.dataset.accent)return task(()=>call('SavePreferences',{...store.snapshot.preferences,accent:target.dataset.accent}));const a=target.dataset.action;
+if(a==='save-profile'){
+	e.preventDefault();
+	return handleSaveProfile(document.querySelector('#editor'));
+}
 if(a==='toggle-connect'||a==='toggle-global')return start(active()||selected());
-if(a==='toggle-route'){const p=store.snapshot.profiles.find(x=>x.id===target.dataset.id);return start(p);}
+if(a==='minimize-window')return call('MinimizeWindow');
+if(a==='toggle-route'){
+	const id=target.dataset.id||target.closest('[data-id]')?.dataset.id;
+	const p=store.snapshot.profiles.find(x=>x.id===id);
+	if(p){
+		const s=store.snapshot;
+		if(p.id===s.active&&(s.state==='connected'||s.state==='connecting')){
+			return task(()=>call('Disconnect'));
+		}
+		return start(p,true);
+	}
+	return;
+}
 if(a==='run-diag'){store.diagTesting=true;updateHome();return task(async()=>{try{store.diagReport=await call('RunDiagnostics');}finally{store.diagTesting=false;updateHome();}});}
+// 首页组件自定义编辑交互
+if(a==='toggle-home-edit'){store.homeEdit=!store.homeEdit;render();return;}
+if(a==='toggle-widget-size'){
+	const w=target.dataset.widget||target.closest('[data-widget]')?.dataset.widget;
+	if(!w)return;
+	const sizes={...(store.snapshot.preferences.widgetSizes||{})};
+	const current=sizes[w]||((w==='diag'||w==='logs')?'full':'half');
+	sizes[w]=current==='full'?'half':'full';
+	return task(()=>call('SavePreferences',{...store.snapshot.preferences,widgetSizes:sizes}));
+}
+if(a==='move-widget-up'){
+	const w=target.dataset.widget;const cur=[...(store.snapshot.preferences.widgets||['status','speed','diag','logs'])];
+	const idx=cur.indexOf(w);
+	if(idx>0){const tmp=cur[idx-1];cur[idx-1]=cur[idx];cur[idx]=tmp;return task(()=>call('SavePreferences',{...store.snapshot.preferences,widgets:cur}));}
+	return;
+}
+if(a==='move-widget-down'){
+	const w=target.dataset.widget;const cur=[...(store.snapshot.preferences.widgets||['status','speed','diag','logs'])];
+	const idx=cur.indexOf(w);
+	if(idx>=0&&idx<cur.length-1){const tmp=cur[idx+1];cur[idx+1]=cur[idx];cur[idx]=tmp;return task(()=>call('SavePreferences',{...store.snapshot.preferences,widgets:cur}));}
+	return;
+}
+if(a==='hide-widget'){
+	const w=target.dataset.widget;const cur=[...(store.snapshot.preferences.widgets||['status','speed','diag','logs'])];
+	const next=cur.filter(x=>x!==w);
+	return task(()=>call('SavePreferences',{...store.snapshot.preferences,widgets:next}));
+}
+if(a==='add-widget'){
+	const w=target.dataset.widget;const cur=[...(store.snapshot.preferences.widgets||['status','speed','diag','logs'])];
+	if(!cur.includes(w)){cur.push(w);return task(()=>call('SavePreferences',{...store.snapshot.preferences,widgets:cur}));}
+	return;
+}
 if(target.dataset.select)return chooseRoute(target.dataset.select);if(a==='edit-route')return edit(store.snapshot.profiles.find(p=>p.id===target.dataset.id));if(a==='add')return edit();if(a==='edit')return edit(selected());if(a==='edit-account')return edit(store.snapshot.profiles.find(p=>p.id===target.dataset.id));if(a==='goto-connections')return go('connections');if(a==='connect')return start(active()||selected());if(a==='close')return modal.close();if(a==='cancel-challenge')return task(async()=>{await call('Disconnect');modal.close();});if(a?.startsWith('view-'))return task(()=>call('SavePreferences',{...store.snapshot.preferences,view:a.slice(5)}));if(a==='delete')return confirmAction('removeConfirm',async()=>{await call('DeleteProfile',editorProfile.id);editorProfile=null;go('connections');});if(a==='forget')return confirmAction('forget',()=>call('ForgetPassword',target.dataset.id));if(a==='export')return task(async()=>download(await call('ExportData'),'CampusWay-routes.json'));if(a==='check')return task(async()=>{versionResult=await call('CheckVersion','');render();});if(a==='export-logs')download(JSON.stringify(store.snapshot.logs,null,2),'CampusWay-events.json');if(a==='copy-logs')task(async()=>{await navigator.clipboard.writeText(store.snapshot.logs.map(l=>`${l.time} ${message(l.message)}`).join('\n'));toast('copied');});});
 app.addEventListener('input',e=>{if(e.target.id==='search'){store.query=e.target.value;document.querySelector('#route-list').innerHTML=routes();}});
 app.addEventListener('change',e=>{if(e.target.closest('#editor')){syncProtocol();return;}
@@ -61,7 +166,53 @@ if(e.target.dataset.widget){
 	const next=e.target.checked?Array.from(new Set([...current,w])):current.filter(x=>x!==w);
 	return task(()=>call('SavePreferences',{...store.snapshot.preferences,widgets:next}));
 }
-if(['theme','view','density','sort','language'].includes(e.target.name))return task(()=>call('SavePreferences',{...store.snapshot.preferences,[e.target.name]:e.target.value}));if(e.target.id==='import-file'){const file=e.target.files[0];if(file)task(async()=>{if(file.size>1024*1024)throw new Error('Import exceeds 1 MB');await call('ImportData',await file.text());toast('imported');render();});}});
+if(['theme','view','density','sort','language','closeAction'].includes(e.target.name))return task(()=>call('SavePreferences',{...store.snapshot.preferences,[e.target.name]:e.target.value}));if(e.target.id==='import-file'){const file=e.target.files[0];if(file)task(async()=>{if(file.size>1024*1024)throw new Error('Import exceeds 1 MB');await call('ImportData',await file.text());toast('imported');render();});}});
+
+// 首页组件原生拖拽排序交互
+let draggedWidget = null;
+app.addEventListener('dragstart', e => {
+	const shell = e.target.closest('.widget-shell');
+	if (!shell) return;
+	draggedWidget = shell.dataset.widget;
+	shell.classList.add('dragging');
+	if (e.dataTransfer) {
+		e.dataTransfer.effectAllowed = 'move';
+		e.dataTransfer.setData('text/plain', draggedWidget);
+	}
+});
+app.addEventListener('dragover', e => {
+	const shell = e.target.closest('.widget-shell');
+	if (!shell || !draggedWidget || shell.dataset.widget === draggedWidget) return;
+	e.preventDefault();
+	if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
+	shell.classList.add('drag-over');
+});
+app.addEventListener('dragleave', e => {
+	const shell = e.target.closest('.widget-shell');
+	if (shell) shell.classList.remove('drag-over');
+});
+app.addEventListener('drop', e => {
+	const shell = e.target.closest('.widget-shell');
+	if (!shell || !draggedWidget) return;
+	e.preventDefault();
+	shell.classList.remove('drag-over');
+	const targetWidget = shell.dataset.widget;
+	if (targetWidget && targetWidget !== draggedWidget) {
+		const cur = [...(store.snapshot.preferences.widgets || ['status', 'speed', 'diag', 'logs'])];
+		const fromIdx = cur.indexOf(draggedWidget);
+		const toIdx = cur.indexOf(targetWidget);
+		if (fromIdx >= 0 && toIdx >= 0) {
+			cur.splice(fromIdx, 1);
+			cur.splice(toIdx, 0, draggedWidget);
+			task(() => call('SavePreferences', { ...store.snapshot.preferences, widgets: cur }));
+		}
+	}
+	draggedWidget = null;
+});
+app.addEventListener('dragend', () => {
+	document.querySelectorAll('.widget-shell').forEach(el => el.classList.remove('dragging', 'drag-over'));
+	draggedWidget = null;
+});
 modal.addEventListener('cancel',e=>{if(modal.dataset.kind==='challenge'){e.preventDefault();task(async()=>{await call('Disconnect');modal.close();});}});
 window.addEventListener('hashchange',()=>{render();document.querySelector('#main').focus({preventScroll:true});});
 // Only snapshots update on polling; an editor draft is never replaced by background events.

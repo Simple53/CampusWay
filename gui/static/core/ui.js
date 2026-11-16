@@ -9,3 +9,9 @@ export function toggleSwitch(checked=false,action='toggle-connect',extra=''){
 	return `<button type="button" class="toggle-switch ${checked?'active':''}" data-action="${action}" role="switch" aria-checked="${checked}" ${extra} title="${t(checked?'disconnect':'connect')}"><span class="toggle-thumb"></span></button>`;
 }
 export function download(text,name){const url=URL.createObjectURL(new Blob([text],{type:'application/json'}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+
+// iconButton renders a square, icon-only button. `label` is an i18n key used for
+// the tooltip and screen readers; `on` marks a toggled-on state.
+export const iconButton=(name,action,label,extra='',on=false)=>`<button type="button" class="icon-btn quiet ${on?'on':''}" data-action="${action}" aria-label="${t(label)}" title="${t(label)}" ${extra}>${icon(name)}</button>`;
+// glyph renders a small status icon (tone: ok | bad | warn | idle).
+export const glyph=(name,tone='idle')=>`<svg class="glyph ${tone}" aria-hidden="true"><use href="/icons.svg#${name}"></use></svg>`;

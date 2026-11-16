@@ -73,12 +73,12 @@ func TestRejectUnknownIdentityAndInvalidGateway(t *testing.T) {
 }
 func TestPreferencesAndBoundedLogCursor(t *testing.T) {
 	s := newAppAt(t.TempDir())
-	p := Preferences{Accent: "graphite", Language: "zh-CN", Theme: "dark", View: "table", Density: "compact", Sort: "name"}
+	p := Preferences{Accent: "graphite", Language: "zh-CN", Theme: "dark", View: "table", Density: "compact", Sort: "name", CloseAction: "minimize"}
 	if err := s.SavePreferences(p); err != nil {
 		t.Fatal(err)
 	}
 	got := newAppAt(s.dir).GetSnapshot().Preferences
-	if got.Accent != p.Accent || got.Language != p.Language || got.Theme != p.Theme || got.View != p.View || got.Density != p.Density || got.Sort != p.Sort {
+	if got.Accent != p.Accent || got.Language != p.Language || got.Theme != p.Theme || got.View != p.View || got.Density != p.Density || got.Sort != p.Sort || got.CloseAction != p.CloseAction {
 		t.Fatal("preferences lost")
 	}
 	for i := 0; i < 510; i++ {
@@ -191,5 +191,24 @@ func TestColorThemesPersistAndRejectUnknown(t *testing.T) {
 	p.Accent = "invalid"
 	if e := s.SavePreferences(p); e == nil {
 		t.Fatal("unknown accent accepted")
+	}
+}
+
+func TestCloseActionPreferenceValidation(t *testing.T) {
+	s := newAppAt(t.TempDir())
+	p := s.GetSnapshot().Preferences
+	if p.CloseAction != "minimize" {
+		t.Fatalf("expected default close action to be 'minimize', got %q", p.CloseAction)
+	}
+	p.CloseAction = "exit"
+	if err := s.SavePreferences(p); err != nil {
+		t.Fatal(err)
+	}
+	if got := newAppAt(s.dir).GetSnapshot().Preferences.CloseAction; got != "exit" {
+		t.Fatalf("closeAction 'exit' not persisted, got %q", got)
+	}
+	p.CloseAction = "invalid_action"
+	if err := s.SavePreferences(p); err == nil {
+		t.Fatal("expected error on invalid close action, got nil")
 	}
 }

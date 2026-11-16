@@ -15,7 +15,7 @@ import (
 
 //go:embed static
 var staticFS embed.FS
-var version = "0.1.0"
+var version = "0.1.1"
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "--engine" {
@@ -61,16 +61,23 @@ func main() {
 					runtime.WindowSetSize(ctx, 460, 600)
 				}
 			}
+			app.minimize = func() {
+				runtime.WindowMinimise(ctx)
+			}
 		},
 		OnBeforeClose: func(ctx context.Context) bool {
-			if quitting {
+			closeAction := app.GetSnapshot().Preferences.CloseAction
+			if quitting || closeAction == "exit" {
 				if err := app.Disconnect(); err != nil {
 					_, _ = runtime.MessageDialog(ctx, runtime.MessageDialogOptions{Type: runtime.WarningDialog, Title: "CampusWay", Message: err.Error()})
 					return true
 				}
+				if tray != nil {
+					tray.destroy()
+				}
 				return false
 			}
-			// Minimize / Hide to tray on close
+			// 默认最小化/隐藏至系统托盘
 			runtime.WindowHide(ctx)
 			return true
 		},
