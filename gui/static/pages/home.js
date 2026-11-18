@@ -42,31 +42,32 @@ export function home() {
 
 	// 循环生成活跃组件卡片，并附加编辑模式工具条与尺寸调整
 	const renderedList = activeWidgets
-		.map((w, index) => {
+		.map(w => {
 			const id = widgetMap[w];
 			if (!id || !renderedModules[id]) return '';
-			const isFirst = index === 0;
-			const isLast = index === activeWidgets.length - 1;
+
 
 			// 计算当前组件大小，默认 diag 和 logs 为 full，其余为 half
 			const defaultSize = (w === 'diag' || w === 'logs') ? 'full' : 'half';
 			const currentSize = widgetSizes[w] || defaultSize;
-			const isFull = currentSize === 'full';
+			const dimensions = store.snapshot.preferences.widgetDimensions?.[w];
+			const columns = Math.max(4,Math.min(12,Number(dimensions?.columns)||(currentSize==='full'?12:6)));
+			const height = Math.max(0,Math.min(720,Number(dimensions?.height)||0));
 
-			// 彻底移除箭头按钮，实现完全自由拖拽与手柄缩放
+
+			// 尺寸与显隐控制仅在编辑模式显示。
 			const tools = store.homeEdit ? `
 				<div class="widget-tools">
+					${iconButton(currentSize==='full'?'minimize-2':'maximize-2','toggle-widget-size',currentSize==='full'?'shrinkWidget':'expandWidget',`data-widget="${w}"`)}
 					${iconButton('eye-off', 'hide-widget', 'hideWidget', `data-widget="${w}"`)}
 				</div>
 			` : '';
 
 			return `
-				<div class="widget-shell size-${currentSize} ${store.homeEdit ? 'editing' : ''}" draggable="true" data-widget="${w}">
+				<div class="widget-shell ${store.homeEdit?'editing':''}" style="--widget-columns:${columns};--widget-height:${height?height+'px':'auto'}" draggable="${store.homeEdit}" data-widget="${w}" data-columns="${columns}">
 					${tools}
 					<div id="${id}">${renderedModules[id]}</div>
-					<div class="widget-resize-handle" data-resize-widget="${w}" title="${t('dragToResize')}" role="separator" aria-orientation="horizontal">
-						<svg class="resize-icon" viewBox="0 0 16 16"><path d="M14 14L14 8M14 14L8 14M14 14L6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-					</div>
+					${store.homeEdit?`<button type="button" class="widget-resize-handle" draggable="false" aria-label="${t('resizeLayout')}" title="${t('resizeLayout')}"></button>`:''}
 				</div>
 			`;
 		})
@@ -83,12 +84,12 @@ export function home() {
 			<span style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-right:8px;">
 				${icon('pencil')} ${t('customizeWidgets')}:
 			</span>
-			<span style="font-size:11px;color:var(--muted);margin-right:8px;">${t('dragHint')}</span>
+			<span style="font-size:11px;color:var(--muted);margin-right:8px;">${t('resizeLayout')}</span>
 			${hiddenWidgets.length ? hiddenWidgets.map(w => `
 				<button type="button" class="chip" data-action="add-widget" data-widget="${w}">
 					${icon('plus')} ${t(w)}
 				</button>
-			`).join('') : `<span class="hint" style="align-self:center;">${t('allLogs')}</span>`}
+			`).join('') : ''}
 		</div>
 	` : '';
 

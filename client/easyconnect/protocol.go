@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/nnu-connect/nnu-connect/log"
 	"github.com/refraction-networking/utls"
@@ -57,6 +58,7 @@ func (c *Client) tlsConn() (*tls.UConn, error) {
 		return nil, err
 	}
 	log.Println("Socket: connected to:", dialConn.RemoteAddr())
+	_ = dialConn.SetDeadline(time.Now().Add(20 * time.Second))
 
 	// Use uTLS to construct a weird TLS Client Hello (required by Sangfor)
 	// The VPN and HTTP Server share port 443, Sangfor uses a special SessionID to distinguish them
@@ -87,6 +89,12 @@ func (c *Client) RecvConn() (*tls.UConn, error) {
 	if err != nil {
 		return nil, err
 	}
+	ok := false
+	defer func() {
+		if !ok {
+			_ = conn.Close()
+		}
+	}()
 
 	// RECV STREAM START
 	message := []byte{0x06, 0x00, 0x00, 0x00}
@@ -109,10 +117,12 @@ func (c *Client) RecvConn() (*tls.UConn, error) {
 	log.DebugPrintf("Recv handshake: read %d bytes", n)
 	log.DebugDumpHex(reply[:n])
 
-	if reply[0] != 0x01 {
+	if n == 0 || reply[0] != 0x01 {
 		return nil, errors.New("unexpected recv handshake reply")
 	}
 
+	ok = true
+	_ = conn.SetDeadline(time.Time{})
 	return conn, nil
 }
 
@@ -167,6 +177,7 @@ func (c *Client) SendConn() (*tls.UConn, error) {
 
 	switch reply[0] {
 	case 0x02:
+		_ = conn.SetDeadline(time.Time{})
 		return conn, nil
 	case 0x08:
 		_ = conn.Close()

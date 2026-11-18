@@ -1,4 +1,4 @@
-# CampusWay CLI 配置文件示例
+# RouteDesk CLI 配置文件示例
 # 项目主页: https://github.com/Simple53/CampusWay
 
 protocol = "easyconnect"             # 协议类型: "easyconnect" 或 "atrust"

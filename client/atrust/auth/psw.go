@@ -31,8 +31,8 @@ func (m PasswordLogin) LoginDomain() string {
 	return m.Domain
 }
 
-func (m PasswordLogin) login(s *Session, _ AuthInfo) error {
-	return s.loginAuthPsw(m.Username, m.Password, m.Domain, m.GraphCodeFile)
+func (m PasswordLogin) login(s *Session, info AuthInfo) error {
+	return s.loginAuthPsw(m.Username, m.Password, info.LoginDomain, m.GraphCodeFile)
 }
 
 func (s *Session) loginAuthPsw(username, password, loginDomain, graphCodeFile string) error {
@@ -112,6 +112,9 @@ func (s *Session) pswImpl(username, password, loginDomain, graphCheckCode string
 	log.DebugPrintf("Parsed psw: %+v", re)
 
 	s.ticket = re.Data.Ticket
+	if re.Data.GraphCheckCodeEnable != 1 && (re.Code != 0 || s.ticket == "") {
+		return 0, fmt.Errorf("password authentication rejected (code %d): %s", re.Code, re.Message)
+	}
 
 	return re.Data.GraphCheckCodeEnable, nil
 }

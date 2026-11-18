@@ -18,7 +18,7 @@ import (
 
 var CommitID string
 
-const campusWayVersion = "0.1.1"
+const routeDeskVersion = "2.0.0"
 
 func getTOMLVal[T int | uint64 | string | bool](valPointer *T, defaultVal T) T {
 	if valPointer == nil {
@@ -33,7 +33,7 @@ func parseTOMLConfig(configFile string, conf *configs.Config) error {
 
 	_, err := toml.DecodeFile(configFile, &confTOML)
 	if err != nil {
-		return errors.New("CampusWay: error parsing the config file: " + err.Error())
+		return errors.New("RouteDesk: error parsing the config file: " + err.Error())
 	}
 
 	conf.Protocol = getTOMLVal(confTOML.Protocol, "easyconnect")
@@ -86,15 +86,15 @@ func parseTOMLConfig(configFile string, conf *configs.Config) error {
 
 	for _, singlePortForwarding := range confTOML.PortForwarding {
 		if singlePortForwarding.NetworkType == nil {
-			return errors.New("CampusWay: network type is not set")
+			return errors.New("RouteDesk: network type is not set")
 		}
 
 		if singlePortForwarding.BindAddress == nil {
-			return errors.New("CampusWay: bind address is not set")
+			return errors.New("RouteDesk: bind address is not set")
 		}
 
 		if singlePortForwarding.RemoteAddress == nil {
-			return errors.New("CampusWay: remote address is not set")
+			return errors.New("RouteDesk: remote address is not set")
 		}
 
 		conf.PortForwardingList = append(conf.PortForwardingList, configs.SinglePortForwarding{
@@ -106,11 +106,11 @@ func parseTOMLConfig(configFile string, conf *configs.Config) error {
 
 	for _, singleCustomDns := range confTOML.CustomDNS {
 		if singleCustomDns.HostName == nil {
-			return errors.New("CampusWay: host name is not set")
+			return errors.New("RouteDesk: host name is not set")
 		}
 
 		if singleCustomDns.IP == nil {
-			return errors.New("CampusWay: IP is not set")
+			return errors.New("RouteDesk: IP is not set")
 		}
 
 		conf.CustomDNSList = append(conf.CustomDNSList, configs.SingleCustomDNS{
@@ -122,7 +122,7 @@ func parseTOMLConfig(configFile string, conf *configs.Config) error {
 	for _, singleCustomProxyDomain := range confTOML.CustomProxyDomain {
 		var domainRegex = regexp.MustCompile(`^[a-zA-Z\d-]+(\.[a-zA-Z\d-]+)*\.[a-zA-Z]{2,}$`)
 		if !domainRegex.MatchString(singleCustomProxyDomain) {
-			return fmt.Errorf("CampusWay: %s is not a valid domain", singleCustomProxyDomain)
+			return fmt.Errorf("RouteDesk: %s is not a valid domain", singleCustomProxyDomain)
 		}
 		conf.CustomProxyDomain = append(conf.CustomProxyDomain, singleCustomProxyDomain)
 	}
@@ -167,7 +167,7 @@ func init() {
 	flag.StringVar(&conf.RemoteDNSServer, "remote-dns-server", "auto", "Remote DNS server address. Set to 'auto' to use remote DNS server provided by server")
 	flag.StringVar(&conf.SecondaryDNSServer, "secondary-dns-server", "114.114.114.114", "Secondary DNS server address. Leave empty to use system default DNS server")
 	flag.StringVar(&conf.DNSServerBind, "dns-server-bind", "", "The address DNS server listens on (e.g. 127.0.0.1:53)")
-	flag.BoolVar(&conf.DNSHijack, "dns-hijack", false, "Hijack all DNS queries to CampusWay")
+	flag.BoolVar(&conf.DNSHijack, "dns-hijack", false, "Hijack all DNS queries to RouteDesk")
 	flag.BoolVar(&conf.FakeIP, "fake-ip", false, "Enable Fake IP for DNS hijack")
 	flag.StringVar(&conf.GraphCodeFile, "graph-code-file", "", "Graph Check Code File")
 	flag.StringVar(&conf.BindInterface, "bind-interface", "", "Bind VPN underlay connections to this network interface")
@@ -198,7 +198,7 @@ func init() {
 	flag.Parse()
 
 	if showVersion {
-		fmt.Printf("CampusWay CLI v%s\n", campusWayVersion)
+		fmt.Printf("RouteDesk CLI v%s\n", routeDeskVersion)
 		os.Exit(0)
 	}
 
@@ -262,7 +262,7 @@ func init() {
 			for _, forwardingString := range forwardingStringList {
 				addressStringList := strings.Split(forwardingString, "-")
 				if len(addressStringList) != 2 {
-					fmt.Fprintln(os.Stderr, "CampusWay: wrong tcp port forwarding format")
+					fmt.Fprintln(os.Stderr, "RouteDesk: wrong tcp port forwarding format")
 					os.Exit(1)
 				}
 
@@ -279,7 +279,7 @@ func init() {
 			for _, forwardingString := range forwardingStringList {
 				addressStringList := strings.Split(forwardingString, "-")
 				if len(addressStringList) != 2 {
-					fmt.Fprintln(os.Stderr, "CampusWay: wrong udp port forwarding format")
+					fmt.Fprintln(os.Stderr, "RouteDesk: wrong udp port forwarding format")
 					os.Exit(1)
 				}
 
@@ -296,7 +296,7 @@ func init() {
 			for _, dnsString := range dnsList {
 				dnsStringSplit := strings.Split(dnsString, ":")
 				if len(dnsStringSplit) != 2 {
-					fmt.Fprintln(os.Stderr, "CampusWay: wrong custom dns format")
+					fmt.Fprintln(os.Stderr, "RouteDesk: wrong custom dns format")
 					os.Exit(1)
 				}
 
@@ -312,7 +312,7 @@ func init() {
 			for _, domain := range domainList {
 				var domainRegex = regexp.MustCompile(`^[a-zA-Z\d-]+(\.[a-zA-Z\d-]+)*\.[a-zA-Z]{2,}$`)
 				if !domainRegex.MatchString(domain) {
-					fmt.Fprintf(os.Stderr, "CampusWay: %s is not a valid domain\n", domain)
+					fmt.Fprintf(os.Stderr, "RouteDesk: %s is not a valid domain\n", domain)
 					os.Exit(1)
 				}
 				conf.CustomProxyDomain = append(conf.CustomProxyDomain, domain)
@@ -341,7 +341,7 @@ func init() {
 		}
 	}
 	if missing {
-		fmt.Println("CampusWay: missing required arguments")
+		fmt.Println("RouteDesk: missing required arguments")
 		fmt.Println("Please see: https://github.com/Simple53/CampusWay")
 		fmt.Println("\nUsage:")
 		flag.PrintDefaults()

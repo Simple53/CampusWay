@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: 向 CampusWay 提出建议/功能请求
+about: 向 RouteDesk 提出建议/功能请求
 title: ''
 labels: enhancement
 

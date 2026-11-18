@@ -272,27 +272,24 @@ func calcXRequestSig(key []byte, data []byte) string {
 }
 
 func (c *Client) DialTCP(ctx context.Context, addr *net.TCPAddr) (net.Conn, error) {
-	appID := ""
-	nodeGroupID := ""
-	domain := ""
-	if res := ctx.Value(resolve.ContextKeyDomainResource); res != nil {
-		resource := res.(client.DomainResource)
-		appID = resource.AppID
-		nodeGroupID = resource.NodeGroupID
-		if res = ctx.Value(resolve.ContextKeyResolveHost); res != nil {
-			domain = res.(string)
-		}
-	} else {
+	appID, nodeGroupID, domain := "", "", ""
+	if resource, ok := ctx.Value(resolve.ContextKeyDomainResource).(client.DomainResource); ok &&
+		resource.AppID != "" && resource.PortMin <= addr.Port && addr.Port <= resource.PortMax &&
+		(resource.Protocol == "tcp" || resource.Protocol == "all") {
+		appID, nodeGroupID = resource.AppID, resource.NodeGroupID
+		domain, _ = ctx.Value(resolve.ContextKeyResolveHost).(string)
+	}
+	if appID == "" {
 		for _, resource := range c.ipResources {
-			if bytes.Compare(addr.IP, resource.IPMin) >= 0 && bytes.Compare(addr.IP, resource.IPMax) <= 0 {
-				if resource.PortMin <= addr.Port && addr.Port <= resource.PortMax {
-					if resource.Protocol == "tcp" || resource.Protocol == "all" {
-						appID = resource.AppID
-						nodeGroupID = resource.NodeGroupID
-					}
-				}
+			if resource.AppID != "" && bytes.Compare(addr.IP, resource.IPMin) >= 0 && bytes.Compare(addr.IP, resource.IPMax) <= 0 &&
+				resource.PortMin <= addr.Port && addr.Port <= resource.PortMax &&
+				(resource.Protocol == "tcp" || resource.Protocol == "all") {
+				appID, nodeGroupID = resource.AppID, resource.NodeGroupID
 			}
 		}
+	}
+	if appID == "" {
+		return nil, fmt.Errorf("%s: %w", addr, client.ErrResourceNotFound)
 	}
 
 	c.BestNodesRWMutex.RLock()

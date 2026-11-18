@@ -26,8 +26,8 @@ func (m SMSLogin) LoginDomain() string {
 	return m.Domain
 }
 
-func (m SMSLogin) login(s *Session, _ AuthInfo) error {
-	return s.loginAuthSmsCheckCode(m.Phone, m.Domain, m.GraphCodeFile)
+func (m SMSLogin) login(s *Session, info AuthInfo) error {
+	return s.loginAuthSmsCheckCode(m.Phone, info.LoginDomain, m.GraphCodeFile)
 }
 
 func (s *Session) loginAuthSmsCheckCode(phone, loginDomain, graphCodeFile string) error {

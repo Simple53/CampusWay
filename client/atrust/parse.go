@@ -242,10 +242,10 @@ func (c *Client) parseResource(resource []byte) error {
 	}
 
 	c.MajorNodeGroup = clientResource.Data.AppList.Data.Config.NodeGroupConf.MajorNodeGroup.ID
-	c.NodeGroups = make(map[string][]string)
-	for _, nodeGroup := range clientResource.Data.AppList.Data.Config.NodeGroupConf.NodeGroupList {
-		addressList := make([]string, 0)
-		for _, addressInfo := range nodeGroup.AddressInfo {
+	c.NodeGroups = make(map[string]nodeGroup)
+	for _, group := range clientResource.Data.AppList.Data.Config.NodeGroupConf.NodeGroupList {
+		var addresses nodeGroup
+		for _, addressInfo := range group.AddressInfo {
 			address := addressInfo.Address
 			if address == "{{sdpcHost}}" {
 				address = c.serverAddress
@@ -253,7 +253,11 @@ func (c *Client) parseResource(resource []byte) error {
 			if !strings.Contains(address, ":") {
 				address += ":441"
 			}
-			addressList = append(addressList, address)
+			if strings.EqualFold(addressInfo.Type, "lan") {
+				addresses.lan = append(addresses.lan, address)
+			} else {
+				addresses.wan = append(addresses.wan, address)
+			}
 
 			// Remove ip from ipSetBuilder to prevent circular routing
 			host, _, err := net.SplitHostPort(address)
@@ -266,8 +270,8 @@ func (c *Client) parseResource(resource []byte) error {
 				log.DebugPrintf("Remove IP from IP set to prevent circular routing: %s", ip)
 			}
 		}
-		c.NodeGroups[nodeGroup.ID] = addressList
-		log.DebugPrintf("Node Group ID: %s, Addresses: %v", nodeGroup.ID, addressList)
+		c.NodeGroups[group.ID] = addresses
+		log.DebugPrintf("Node group %s: WAN %v, LAN %v", group.ID, addresses.wan, addresses.lan)
 	}
 
 	c.ipSet, _ = ipSetBuilder.IPSet()

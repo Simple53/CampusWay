@@ -2,9 +2,11 @@ package dial
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/nnu-connect/nnu-connect/client"
 	"github.com/nnu-connect/nnu-connect/log"
@@ -187,9 +189,20 @@ func (d *Dialer) Dial(ctx context.Context, network string, addr string) (net.Con
 
 	var ip net.IP
 	if ip = net.ParseIP(host); ip == nil {
+		resolveStarted := time.Now()
 		ctx, ip, err = d.resolver.Resolve(ctx, host)
+		if elapsed := time.Since(resolveStarted); elapsed >= 200*time.Millisecond {
+			log.Printf("DNS %s: %d ms", host, elapsed.Milliseconds())
+		}
+		_, campus := ctx.Value(resolve.ContextKeyDomainResource).(client.DomainResource)
 		if err != nil {
+			if campus {
+				return nil, fmt.Errorf("resolve campus host %s: %w", host, err)
+			}
 			return d.dialDirectHost(ctx, network, addr)
+		}
+		if campus && ip.To4() == nil {
+			return nil, fmt.Errorf("campus host %s has no IPv4 address for this tunnel", host)
 		}
 
 		if strings.Count(ip.String(), ":") > 0 {
@@ -197,7 +210,12 @@ func (d *Dialer) Dial(ctx context.Context, network string, addr string) (net.Con
 		}
 	}
 
-	return d.DialIPPort(ctx, network, ip.String()+":"+port)
+	started := time.Now()
+	conn, err := d.DialIPPort(ctx, network, ip.String()+":"+port)
+	if elapsed := time.Since(started); elapsed >= 200*time.Millisecond {
+		log.Printf("Connect %s: %d ms", addr, elapsed.Milliseconds())
+	}
+	return conn, err
 }
 
 func NewDialer(stack stack.Stack, resolver *resolve.Resolver, ipResources []client.IPResource, alwaysUseVPN bool, dialDirectProxy string) *Dialer {

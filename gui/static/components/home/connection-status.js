@@ -18,8 +18,9 @@ export function connectionStatus(){
 	const p = active() || selected();
 	const r = store.diagReport;
 	const isConnected = s.state === 'connected';
-	const rawIP = r?.localIP || '127.0.0.1';
-	const displayIP = maskIP(rawIP, store.ipMasked);
+	const info = store.ipInfo;
+	const renderAddress=(ip,family)=>`<strong class="ip-val">${esc(maskIP(ip,store.ipMasked))}</strong>${family?` <span class="hint">${esc(family)}</span>`:''}`;
+	const tunnelIP=s.tunnelIP;
 
 	return `<section class="home-module ip-info-module" aria-labelledby="ip-info-title">
 		<div class="module-heading">
@@ -29,8 +30,21 @@ export function connectionStatus(){
 			</div>
 			<div style="display:flex;align-items:center;gap:8px;">
 				${status(s.state)}
-				<button type="button" class="icon-btn quiet btn-sm" data-action="run-diag" title="${t('check')}" aria-label="${t('check')}">${icon('refresh')}</button>
+				<button type="button" class="icon-btn quiet ip-eye-btn" data-action="toggle-ip-mask" aria-label="${t('maskIP')}">${icon(store.ipMasked?'eye-off':'eye')}</button>
+				<button type="button" class="icon-btn quiet btn-sm" data-action="refresh-ip" title="${t('refreshIP')} · ipapi.co" aria-label="${t('refreshIP')}" ${store.ipRefreshing?'disabled':''}>${icon('refresh')}</button>
 			</div>
+		</div>
+		<div class="ip-info-grid">
+			<div class="ip-meta-item">
+				<span>${t('localIP')}</span>
+				<div class="address-list">${store.localIPs?.length?store.localIPs.map(row=>`<div>${renderAddress(row.ip,row.family)}</div>`).join(''):'—'}</div>
+			</div>
+			<div class="ip-meta-item">
+				<span>${t('tunnelIP')}</span>
+				<div>${renderAddress(tunnelIP,tunnelIP?(tunnelIP.includes(':')?'IPv6':'IPv4'):'')}</div>
+			</div>
+			${info?.public?`<div class="ip-meta-item"><span>${t('publicIP')}</span><div>${renderAddress(info.ip,info.family)}</div></div>`:''}
+				${info?.public?`<div class="ip-meta-item"><span>${t('ipRegion')}</span><strong>${esc([...new Set([info.country,info.region].filter(Boolean))].join(' · ')||t('ipRegionUnavailable'))}</strong></div>`:''}
 		</div>
 		${!p ? `
 			<div class="welcome" style="padding:24px 12px;">
@@ -40,28 +54,15 @@ export function connectionStatus(){
 			</div>
 		` : `
 			<div class="ip-info-grid">
-				<div class="ip-info-col">
-					<div class="ip-status-headline">${isConnected ? (r?.fakeIP ? t('fakeIpHint') : t('vpnProxy')) : t('disconnected')}</div>
-					<div class="ip-row">
-						<span class="ip-label">IP:</span>
-						<strong class="ip-val">${esc(displayIP)}</strong>
-						<button type="button" class="icon-btn quiet ip-eye-btn" data-action="toggle-ip-mask" title="${store.ipMasked?'显示明文':'隐藏脱敏'}">${icon(store.ipMasked?'eye-off':'eye')}</button>
-					</div>
-					<div class="ip-row ip-sub">
-						<span class="ip-label">${t('localProxy')}:</span>
-						<span>127.0.0.1:${p.options?.socksPort||1080} / :${p.options?.httpPort||1081}</span>
-					</div>
-				</div>
 				<div class="ip-info-col ip-details-col">
 					<div class="ip-meta-item"><span>${t('gateway')}:</span> <strong>${esc(p.server)}</strong></div>
 					<div class="ip-meta-item"><span>${t('protocol')}:</span> <strong>${p.protocol==='atrust'?'aTrust':'EasyConnect'}</strong></div>
 					<div class="ip-meta-item"><span>${t('dnsServer')}:</span> <strong>${esc(r?.dns||p.options?.remoteDNS||'System')}</strong></div>
+					<div class="ip-meta-item"><span>${t('localProxy')}</span><strong>SOCKS ${p.options?.socksPort||1080} · HTTP ${p.options?.httpPort||1081}</strong></div>
 				</div>
 			</div>
 			${s.state==='error'?`<p class="error" role="alert" style="margin-top:10px;">${esc(message(s.message))}</p>`:''}
-			<div class="ip-info-foot">
-				<span class="hint">${t('autoRefresh')}: 15s</span>
-			</div>
+			${isConnected&&r?.fakeIP?`<p class="hint">${t('fakeIpHint')}</p>`:''}
 		`}
 	</section>`;
 }

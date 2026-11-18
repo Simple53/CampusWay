@@ -69,7 +69,7 @@ func NewStack(client client.Client, dnsHijack, fakeIP bool, ipResources []client
 		return nil, err
 	}
 	ipPrefix, _ := netip.ParsePrefix(s.endpoint.ip.String() + "/32")
-	tunName := "CampusWay"
+	tunName := "RouteDesk"
 	tunName = tun.CalculateInterfaceName(tunName)
 
 	tunOptions := tun.Options{

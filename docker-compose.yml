@@ -1,9 +1,9 @@
 services:
-  campusway:
+  routedesk:
     build:
       context: .
-    image: campusway
-    container_name: campusway
+    image: routedesk
+    container_name: routedesk
     restart: unless-stopped
     ports:
       - "127.0.0.1:1080:1080"

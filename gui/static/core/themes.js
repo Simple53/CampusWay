@@ -9,8 +9,14 @@ export const accents={
 };
 export function palette(accent,mode){return (accents[accent]||accents.graphite)[mode==='dark'?'dark':'light'];}
 export function applyAppearance(preferences){
- const dark=preferences.theme==='dark'||(preferences.theme==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);
+ const next=['system','light','dark'].includes(preferences.theme)?preferences.theme:'system';
+ const previous=document.documentElement.dataset.theme;
+ if(previous!==next){
+  const method={system:'WindowSetSystemDefaultTheme',light:'WindowSetLightTheme',dark:'WindowSetDarkTheme'}[next];
+  window.runtime?.[method]?.();
+ }
+ const dark=next==='dark'||(next==='system'&&matchMedia('(prefers-color-scheme: dark)').matches);
  const [color,on,soft]=palette(preferences.accent,dark?'dark':'light');
- const root=document.documentElement;root.dataset.theme=preferences.theme;root.dataset.accent=preferences.accent||'graphite';
+ const root=document.documentElement;root.dataset.theme=next;root.dataset.accent=preferences.accent||'graphite';
  for(const [key,value] of Object.entries({'--accent':color,'--button':color,'--on':on,'--accent-soft':soft}))root.style.setProperty(key,value);
 }

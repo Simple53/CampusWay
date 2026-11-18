@@ -75,14 +75,14 @@ func ensureIconFiles() (windows.Handle, windows.Handle) {
 	return cachedIcon16, cachedIcon32
 }
 
-// applyWindowIcons 将小图标与大图标显式注入当前 CampusWay 顶层窗口，解决放大/最小化与左上角图标丢失问题
+// applyWindowIcons 将小图标与大图标显式注入当前 RouteDesk 顶层窗口，解决放大/最小化与左上角图标丢失问题
 func applyWindowIcons() {
 	h16, h32 := ensureIconFiles()
 	if h16 == 0 && h32 == 0 {
 		return
 	}
 	go func() {
-		titlePtr, _ := windows.UTF16PtrFromString("CampusWay")
+		titlePtr, _ := windows.UTF16PtrFromString("RouteDesk")
 		for i := 0; i < 30; i++ {
 			hwnd, _, _ := procFindWindowW.Call(0, uintptr(unsafe.Pointer(titlePtr)))
 			if hwnd != 0 {

@@ -21,9 +21,9 @@ func main() {
 	log.Init()
 
 	if CommitID != "" {
-		log.Println("Start CampusWay CLI v" + campusWayVersion + "-" + CommitID)
+		log.Println("Start RouteDesk CLI v" + routeDeskVersion + "-" + CommitID)
 	} else {
-		log.Println("Start CampusWay CLI v" + campusWayVersion)
+		log.Println("Start RouteDesk CLI v" + routeDeskVersion)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -49,6 +49,6 @@ func main() {
 	})
 
 	if err != nil {
-		log.Fatalf("CampusWay execution failed: %v", err)
+		log.Fatalf("RouteDesk execution failed: %v", err)
 	}
 }

@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '发布版本号 (如 v0.1.1)'
+        description: '发布版本号 (如 v2.0.0)'
         required: true
-        default: 'v0.1.1'
+        default: 'v2.0.0'
 
 permissions:
   contents: write
@@ -61,17 +61,17 @@ jobs:
           if ($LASTEXITCODE) { throw 'Worker smoke test failed' }
 
           New-Item -ItemType Directory -Force dist/release | Out-Null
-          Copy-Item "dist/campusway/CampusWay-$semver-windows-x64-portable.zip" "dist/release/"
-          Copy-Item "dist/campusway/campusway-cli-$semver-windows-x64.zip" "dist/release/"
+          Copy-Item "dist/routedesk/RouteDesk-$semver-windows-x64-portable.zip" "dist/release/"
+          Copy-Item "dist/routedesk/routedesk-cli-$semver-windows-x64.zip" "dist/release/"
 
           New-Item -ItemType Directory -Force build/staging/win-arm64 | Out-Null
           $env:GOOS = 'windows'
           $env:GOARCH = 'arm64'
           $env:CGO_ENABLED = '0'
-          go build -buildvcs=false -ldflags "-s -w -X 'main.CommitID=$semver'" -o build/staging/win-arm64/campusway-cli.exe .
+          go build -buildvcs=false -ldflags "-s -w -X 'main.CommitID=$semver'" -o build/staging/win-arm64/routedesk-cli.exe .
           if ($LASTEXITCODE) { throw 'Windows arm64 CLI build failed' }
           Copy-Item LICENSE build/staging/win-arm64/LICENSE
-          Compress-Archive -Force -Path build/staging/win-arm64/campusway-cli.exe, build/staging/win-arm64/LICENSE -DestinationPath "dist/release/campusway-cli-$semver-windows-arm64.zip"
+          Compress-Archive -Force -Path build/staging/win-arm64/routedesk-cli.exe, build/staging/win-arm64/LICENSE -DestinationPath "dist/release/routedesk-cli-$semver-windows-arm64.zip"
 
       - name: Build Windows Installer (NSIS)
         shell: pwsh
@@ -81,12 +81,12 @@ jobs:
           choco install nsis --no-progress -y
           & 'C:/Program Files (x86)/NSIS/makensis.exe' build/windows.nsi
           if ($LASTEXITCODE) { throw 'NSIS installer build failed' }
-          Move-Item build/CampusWay-Setup.exe "dist/release/CampusWay-$semver-windows-x64-setup.exe"
+          Move-Item build/RouteDesk-Setup.exe "dist/release/RouteDesk-$semver-windows-x64-setup.exe"
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: CampusWay-windows
+          name: RouteDesk-windows
           path: dist/release/*
 
   # ==========================================================
@@ -127,14 +127,14 @@ jobs:
         run: |
           bash build/package-unix.sh "${{ matrix.platform }}" "${{ env.SEMVER }}"
           mkdir -p build/staging/cli
-          CGO_ENABLED=0 GOOS=darwin GOARCH="${{ matrix.goarch }}" go build -buildvcs=false -ldflags "-s -w -X 'main.CommitID=${{ env.SEMVER }}'" -o build/staging/cli/campusway-cli .
+          CGO_ENABLED=0 GOOS=darwin GOARCH="${{ matrix.goarch }}" go build -buildvcs=false -ldflags "-s -w -X 'main.CommitID=${{ env.SEMVER }}'" -o build/staging/cli/routedesk-cli .
           cp LICENSE build/staging/cli/LICENSE
-          tar -czf "dist/packages/campusway-cli-${{ env.SEMVER }}-${{ matrix.platform }}.tar.gz" -C build/staging/cli campusway-cli LICENSE
+          tar -czf "dist/packages/routedesk-cli-${{ env.SEMVER }}-${{ matrix.platform }}.tar.gz" -C build/staging/cli routedesk-cli LICENSE
 
       - name: Upload macOS Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: CampusWay-${{ matrix.platform }}
+          name: RouteDesk-${{ matrix.platform }}
           path: dist/packages/*
 
   # ==========================================================
@@ -172,15 +172,15 @@ jobs:
             label="${arch_pair##*:}"
             stage="build/staging/cli-${label}"
             mkdir -p "$stage"
-            CGO_ENABLED=0 GOOS=linux GOARCH="$goarch" go build -buildvcs=false -ldflags "-s -w -X 'main.CommitID=${{ env.SEMVER }}'" -o "$stage/campusway-cli" .
+            CGO_ENABLED=0 GOOS=linux GOARCH="$goarch" go build -buildvcs=false -ldflags "-s -w -X 'main.CommitID=${{ env.SEMVER }}'" -o "$stage/routedesk-cli" .
             cp LICENSE "$stage/LICENSE"
-            tar -czf "dist/packages/campusway-cli-${{ env.SEMVER }}-${label}.tar.gz" -C "$stage" campusway-cli LICENSE
+            tar -czf "dist/packages/routedesk-cli-${{ env.SEMVER }}-${label}.tar.gz" -C "$stage" routedesk-cli LICENSE
           done
 
       - name: Upload Linux Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: CampusWay-linux
+          name: RouteDesk-linux
           path: dist/packages/*
 
   # ==========================================================
@@ -242,15 +242,15 @@ jobs:
 
           mkdir -p build_assets
           gomobile init
-          gomobile bind -target=android -androidapi "${ANDROID_PLATFORM_VERSION}" -o build_assets/campusway.aar ./mobile
+          gomobile bind -target=android -androidapi "${ANDROID_PLATFORM_VERSION}" -o build_assets/routedesk.aar ./mobile
           cp LICENSE build_assets/LICENSE
-          (cd build_assets && zip -9r "../CampusWay-${{ env.SEMVER }}-android-aar.zip" .)
+          (cd build_assets && zip -9r "../RouteDesk-${{ env.SEMVER }}-android-aar.zip" .)
 
       - name: Upload Android Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: CampusWay-android-aar
-          path: CampusWay-*-android-aar.zip
+          name: RouteDesk-android-aar
+          path: RouteDesk-*-android-aar.zip
 
   # ==========================================================
   # 5. 汇总所有平台产物、生成 SHA256SUMS.txt 并发布 GitHub Release
@@ -273,7 +273,7 @@ jobs:
       - name: Download All Build Artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: CampusWay-*
+          pattern: RouteDesk-*
           merge-multiple: true
           path: release-assets
 
@@ -288,13 +288,15 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_VERSION }}
-          name: CampusWay ${{ env.RELEASE_VERSION }} - 全平台客户端与命令行发行版
+          name: RouteDesk ${{ env.RELEASE_VERSION }} - 全平台客户端与命令行发行版
           draft: false
           prerelease: false
           files: |
             release-assets/*
           body: |
-            ## CampusWay ${{ env.RELEASE_VERSION }} 多平台正式版本发布 / Multi-Platform Release
+            ## RouteDesk ${{ env.RELEASE_VERSION }} 多平台正式版本发布 / Multi-Platform Release
+
+            RouteDesk 原名 CampusWay。新版保留已有线路和登录资料，首页分别显示本机地址与 VPN 地址。全局高级配置提供 DNS 覆写，外观支持跟随系统、浅色和深色。
 
             🌐 **在线交互预览 (Web Preview)**: [https://simple53.github.io/CampusWay/](https://simple53.github.io/CampusWay/)
 
@@ -302,23 +304,23 @@ jobs:
 
             ### 💻 桌面端客户端 / Desktop Applications
             - **Windows (x64)**:
-              - 安装版 / Installer: **`CampusWay-${{ env.SEMVER }}-windows-x64-setup.exe`** (NSIS 标准安装程序，自动创建开始菜单快捷方式)
-              - 便携版 / Portable: **`CampusWay-${{ env.SEMVER }}-windows-x64-portable.zip`** (解压即用，无需安装)
+              - 安装版 / Installer: **`RouteDesk-${{ env.SEMVER }}-windows-x64-setup.exe`** (NSIS 标准安装程序，自动创建开始菜单快捷方式)
+              - 便携版 / Portable: **`RouteDesk-${{ env.SEMVER }}-windows-x64-portable.zip`** (解压即用，无需安装)
             - **macOS (Apple Silicon & Intel)**:
-              - Apple Silicon (M 系列): **`CampusWay-${{ env.SEMVER }}-macos-arm64.dmg`**
-              - Intel Mac: **`CampusWay-${{ env.SEMVER }}-macos-x64.dmg`**
+              - Apple Silicon (M 系列): **`RouteDesk-${{ env.SEMVER }}-macos-arm64.dmg`**
+              - Intel Mac: **`RouteDesk-${{ env.SEMVER }}-macos-x64.dmg`**
             - **Linux (x64)**:
-              - Debian / Ubuntu: **`CampusWay-${{ env.SEMVER }}-linux-x64.deb`**
-              - 通用压缩包 / Tarball: **`CampusWay-${{ env.SEMVER }}-linux-x64.tar.gz`**
+              - Debian / Ubuntu: **`RouteDesk-${{ env.SEMVER }}-linux-x64.deb`**
+              - 通用压缩包 / Tarball: **`RouteDesk-${{ env.SEMVER }}-linux-x64.tar.gz`**
 
             ### ⌨️ 命令行客户端 / Command-Line Tools (CLI)
             适用于无界面服务器、Docker 容器、OpenWrt 路由器与自动化脚本场景：
-            - Windows: `campusway-cli-${{ env.SEMVER }}-windows-x64.zip`, `campusway-cli-${{ env.SEMVER }}-windows-arm64.zip`
-            - macOS: `campusway-cli-${{ env.SEMVER }}-macos-arm64.tar.gz`, `campusway-cli-${{ env.SEMVER }}-macos-x64.tar.gz`
-            - Linux: `campusway-cli-${{ env.SEMVER }}-linux-x64.tar.gz`, `campusway-cli-${{ env.SEMVER }}-linux-arm64.tar.gz`
+            - Windows: `routedesk-cli-${{ env.SEMVER }}-windows-x64.zip`, `routedesk-cli-${{ env.SEMVER }}-windows-arm64.zip`
+            - macOS: `routedesk-cli-${{ env.SEMVER }}-macos-arm64.tar.gz`, `routedesk-cli-${{ env.SEMVER }}-macos-x64.tar.gz`
+            - Linux: `routedesk-cli-${{ env.SEMVER }}-linux-x64.tar.gz`, `routedesk-cli-${{ env.SEMVER }}-linux-arm64.tar.gz`
 
             ### 📱 移动端核心库 / Mobile Core Binding
-            - Android AAR: **`CampusWay-${{ env.SEMVER }}-android-aar.zip`** (`gomobile` 编译产物，用于原生 Android VpnService 集成)
+            - Android AAR: **`RouteDesk-${{ env.SEMVER }}-android-aar.zip`** (`gomobile` 编译产物，用于原生 Android VpnService 集成)
 
             > ⚠️ 桌面安装包当前未进行商业代码签名，Windows SmartScreen 或 macOS Gatekeeper 首次启动时可能需要手动确认信任。完整校验值请查阅附件 `SHA256SUMS.txt`。
         env:

@@ -1,31 +1,31 @@
-## Run in Docker (CampusWay CLI)
+## Run in Docker (RouteDesk CLI)
 
 Build the image from the repository root:
 
 ```bash
-docker build -t campusway .
+docker build -t routedesk .
 ```
 
 Run with your `config.toml` mounted:
 
 ```bash
-docker run -d --name campusway \
+docker run -d --name routedesk \
   -v "$PWD/config.toml:/home/nonroot/config.toml" \
   -p 127.0.0.1:1080:1080 \
   -p 127.0.0.1:1081:1081 \
   --restart unless-stopped \
-  campusway
+  routedesk
 ```
 
 Or use `docker-compose.yml` in the repository root:
 
 ```yaml
 services:
-  campusway:
+  routedesk:
     build:
       context: .
-    image: campusway
-    container_name: campusway
+    image: routedesk
+    container_name: routedesk
     restart: unless-stopped
     ports:
       - "127.0.0.1:1080:1080"
@@ -46,19 +46,19 @@ The aTrust client needs to persist its state (`client_data.json`) across contain
 
 ```yaml
 services:
-  campusway:
-    container_name: campusway
-    image: campusway
+  routedesk:
+    container_name: routedesk
+    image: routedesk
     restart: unless-stopped
     ports:
       - "127.0.0.1:1080:1080"
       - "127.0.0.1:1081:1081"
     volumes:
       - ./config.toml:/home/nonroot/config.toml
-      - campusway-data:/home/nonroot/data
+      - routedesk-data:/home/nonroot/data
 
 volumes:
-  campusway-data:
+  routedesk-data:
 ```
 
 Set in `config.toml`:
@@ -71,7 +71,7 @@ client_data_file = "/home/nonroot/data/client_data.json"
 When first logging in with aTrust where interactive verification is required, run once interactively:
 
 ```bash
-docker compose run --rm -it campusway
+docker compose run --rm -it routedesk
 ```
 
 Once `client_data.json` is saved, press `Ctrl+C` and start normally with `docker compose up -d`.

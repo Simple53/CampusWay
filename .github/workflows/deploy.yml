@@ -1,4 +1,4 @@
-name: Deploy CampusWay Web Preview to GitHub Pages
+name: Deploy RouteDesk Web Preview to GitHub Pages
 
 on:
   push:

@@ -151,7 +151,7 @@ func (t *systemTray) showContextMenu() {
 	}
 
 	procAppendMenuW.Call(hMenu, mfSeparator, 0, 0)
-	quitStr, _ := windows.UTF16PtrFromString("退出 CampusWay (Quit)")
+	quitStr, _ := windows.UTF16PtrFromString("退出 RouteDesk (Quit)")
 	procAppendMenuW.Call(hMenu, mfString, cmdQuit, uintptr(unsafe.Pointer(quitStr)))
 
 	var pt point
@@ -182,7 +182,7 @@ func (t *systemTray) showContextMenu() {
 }
 
 func (t *systemTray) runMessageLoop() {
-	className, _ := windows.UTF16PtrFromString("CampusWayTrayClass")
+	className, _ := windows.UTF16PtrFromString("RouteDeskTrayClass")
 	hInstance, _, _ := procGetModuleHandleW.Call(0)
 	h16, _ := ensureIconFiles()
 	var hIcon uintptr
@@ -226,7 +226,7 @@ func (t *systemTray) runMessageLoop() {
 	t.nid.uFlags = nifMessage | nifIcon | nifTip
 	t.nid.uCallbackMessage = wmTrayIcon
 	t.nid.hIcon = windows.Handle(hIcon)
-	tip, _ := windows.UTF16FromString("CampusWay")
+	tip, _ := windows.UTF16FromString("RouteDesk")
 	copy(t.nid.szTip[:], tip)
 
 	procShellNotifyIconW.Call(nimAdd, uintptr(unsafe.Pointer(&t.nid)))

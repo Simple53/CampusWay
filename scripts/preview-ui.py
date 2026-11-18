@@ -48,7 +48,7 @@ if __name__ == '__main__':
     parser.add_argument('--port', type=int, default=4174)
     args = parser.parse_args()
     server = PreviewServer(('127.0.0.1', args.port), Handler)
-    print(f'CampusWay local preview: http://127.0.0.1:{args.port}', flush=True)
+    print(f'RouteDesk local preview: http://127.0.0.1:{args.port}', flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

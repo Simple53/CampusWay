@@ -172,6 +172,17 @@ func NewStack(client client.Client) (*Stack, error) {
 	cOpt := tcpip.CongestionControlOption("cubic")
 	s.gvisorStack.SetTransportProtocolOption(tcp.ProtocolNumber, &cOpt)
 	s.gvisorStack.AddRoute(tcpip.Route{Destination: header.IPv4EmptySubnet, NIC: NICID})
+	// Finish the data-channel handshake before exposing local proxy listeners.
+	s.endpoint.l3Conn, err = client.NewL3Conn()
+	if err != nil {
+		s.gvisorStack.Close()
+		return nil, err
+	}
+	hook_func.RegisterTerminalFunc("CloseDataTunnel", func(context.Context) error {
+		err := s.endpoint.l3Conn.Close()
+		s.gvisorStack.Close()
+		return err
+	})
 
 	return s, nil
 }
@@ -185,14 +196,9 @@ func (s *Stack) SetupIPPool(ipPool *ippool.IPPool[client.DomainResource]) {
 }
 
 func (s *Stack) Run() {
-	var connErr error
-	s.endpoint.l3Conn, connErr = s.endpoint.client.NewL3Conn()
-	if connErr != nil {
-		panic(connErr)
-	}
 	// Read from VPN server and send to gVisor stack
+	buf := make([]byte, 65535)
 	for {
-		buf := make([]byte, MTU)
 		n, err := s.endpoint.l3Conn.Read(buf)
 		if err != nil {
 			if hook_func.IsTerminal() {
@@ -205,7 +211,7 @@ func (s *Stack) Run() {
 		log.DebugDumpHex(buf[:n])
 
 		packetBuffer := stack.NewPacketBuffer(stack.PacketBufferOptions{
-			Payload: buffer.MakeWithData(buf),
+			Payload: buffer.MakeWithData(buf[:n]),
 		})
 		s.endpoint.dispatcher.DeliverNetworkPacket(header.IPv4ProtocolNumber, packetBuffer)
 		packetBuffer.DecRef()

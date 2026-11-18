@@ -1,6 +1,8 @@
 package easyconnect
 
 import (
+	"encoding/binary"
+	"fmt"
 	"io"
 	"sync"
 
@@ -19,47 +21,69 @@ type L3Conn struct {
 	recvErrCount int
 }
 
-// try best to read, if return err!=nil, please panic
-func (c *L3Conn) Read(p []byte) (n int, err error) {
+// TLS is a byte stream: one Read may contain part of an IP packet or several.
+func readIPPacket(reader io.Reader, p []byte) (int, error) {
+	if len(p) < 4 {
+		return 0, io.ErrShortBuffer
+	}
+	if _, err := io.ReadFull(reader, p[:4]); err != nil {
+		return 0, err
+	}
+	size := int(binary.BigEndian.Uint16(p[2:4]))
+	if p[0]>>4 != 4 || size < 20 || size < int(p[0]&15)*4 {
+		return 0, fmt.Errorf("invalid VPN IPv4 packet length %d", size)
+	}
+	if size > len(p) {
+		return 0, io.ErrShortBuffer
+	}
+	_, err := io.ReadFull(reader, p[4:size])
+	return size, err
+}
+
+func (c *L3Conn) Read(p []byte) (int, error) {
 	c.recvLock.Lock()
 	defer c.recvLock.Unlock()
-	for n, err = c.recvConn.Read(p); err != nil && c.recvErrCount < 5; {
-
-		log.Printf("Error occurred while receiving, retrying: %v", err)
-
-		// Do handshake again and create a new recvConn
-		_ = c.recvConn.Close()
-		c.recvConn, err = c.easyConnectClient.RecvConn()
-		if err != nil {
+	for {
+		n, err := readIPPacket(c.recvConn, p)
+		if err == nil {
+			c.recvErrCount = 0
+			return n, nil
+		}
+		if c.easyConnectClient.lifecycleCtx.Err() != nil || c.recvErrCount >= 5 {
 			return 0, err
 		}
 		c.recvErrCount++
-		if c.recvErrCount >= 5 {
-			return 0, err
-		}
-	}
-	return
-}
-
-// try best to write, if return err!=nil, please panic
-func (c *L3Conn) Write(p []byte) (n int, err error) {
-	c.sendLock.Lock()
-	defer c.sendLock.Unlock()
-	for n, err = c.sendConn.Write(p); err != nil && c.sendErrCount < 5; {
-		log.Printf("Error occurred while sending, retrying: %v", err)
-
-		// Do handshake again and create a new sendConn
-		_ = c.sendConn.Close()
-		c.sendConn, err = c.easyConnectClient.SendConn()
+		log.Printf("Receive tunnel failed; reconnecting: %v", err)
+		_ = c.recvConn.Close()
+		next, err := c.easyConnectClient.RecvConn()
 		if err != nil {
 			return 0, err
 		}
-		c.sendErrCount++
-		if c.sendErrCount >= 5 {
-			return 0, err
-		}
+		c.recvConn = next
 	}
-	return
+}
+
+func (c *L3Conn) Write(p []byte) (int, error) {
+	c.sendLock.Lock()
+	defer c.sendLock.Unlock()
+	for {
+		n, err := c.sendConn.Write(p)
+		if err == nil {
+			c.sendErrCount = 0
+			return n, nil
+		}
+		if c.easyConnectClient.lifecycleCtx.Err() != nil || c.sendErrCount >= 5 {
+			return n, err
+		}
+		c.sendErrCount++
+		log.Printf("Send tunnel failed; reconnecting: %v", err)
+		_ = c.sendConn.Close()
+		next, err := c.easyConnectClient.SendConn()
+		if err != nil {
+			return n, err
+		}
+		c.sendConn = next
+	}
 }
 
 func (c *L3Conn) Close() error {
@@ -89,6 +113,7 @@ func (c *Client) NewL3Conn() (io.ReadWriteCloser, error) {
 	conn.recvConn, err = c.RecvConn()
 	if err != nil {
 		log.Printf("Error occurred while creating recvConn: %v", err)
+		_ = conn.sendConn.Close()
 		return nil, err
 	}
 	return conn, nil

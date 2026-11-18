@@ -10,38 +10,37 @@ import {esc,field,select,button} from '../core/ui.js';
  */
 export function editor(p={}){
 	const o=p.options||{},s=store.snapshot;
-	return `<form id="editor" data-id="${p.id||''}" novalidate>
+	return `<form id="editor" data-id="${esc(p.id||'')}" novalidate>
 		<div class="page-heading">
 			<h1>${t(p.id?'edit':'add')}</h1>
 			${button('cancel','goto-connections','quiet')}
 		</div>
 		<section class="form-section">
-			<h2>${t('basic')}</h2>
-			${field('name','name',p.name||'','text','maxlength="80" placeholder="例如：校内主线路"')}
-			${select('protocol','protocol',p.protocol||'atrust',[['atrust','aTrust'],['easyconnect','EasyConnect']])}
-			<div class="field-pair">
-				${field('gateway','server',p.server||'','text','maxlength="253" spellcheck="false" placeholder="例如：vpn.nnu.edu.cn"')}
-				${field('port','port',p.port||443,'number','min="1" max="65535"')}
+			<div class="field-pair equal">
+				${field('name','name',p.name||'','text','maxlength="80"')}
+				${select('protocol','protocol',p.protocol||'atrust',[['atrust','aTrust'],['easyconnect','EasyConnect']])}
 			</div>
-		</section>
-		<section class="form-section">
-			<h2>${t('auth')}</h2>
-			<div data-atrust>
-				${select('auth','authType',o.authType||'auth/psw',[['auth/psw','passwordAuth'],['auth/smsCheckCode','smsAuth']])}
-				${field('domain','loginDomain',o.loginDomain||'')}
+			${field('gateway','server',p.server||'','text','maxlength="253" spellcheck="false" placeholder="vpn.nnu.edu.cn"')}
+			<div class="field-pair equal credential-fields">
+				${field('account','username',p.username||'','text','autocomplete="username"')}
+				<div data-password>
+					${field('password','password','','password',`autocomplete="new-password" placeholder="${t(p.hasPassword?'saved':'password')}"`)}
+				</div>
 			</div>
-			${field('account','username',p.username||'','text','autocomplete="off" placeholder="请输入您的校园卡号或账号"')}
-			<div data-password>
-				${field('password','password','','password',`autocomplete="new-password" placeholder="${t(p.hasPassword?'saved':'password')}"`)}
-				<label class="check">
-					<input type="checkbox" name="remember" ${p.remember!==false?'checked':''} ${s.canRemember?'':'disabled'}>
-					${t('remember')}
-				</label>
-			</div>
-			<p class="hint">${t('passwordHint')}</p>
+			<label class="check">
+				<input type="checkbox" name="remember" ${s.canRemember&&p.remember!==false?'checked':''} ${s.canRemember?'':'disabled'}>
+				${t('remember')}
+			</label>
 		</section>
 		<details class="advanced">
-			<summary>${t('advanced')}</summary>
+			<summary>${t('advanced')} <span class="hint">${t('networkDefaults')}</span></summary>
+			<section class="form-section">
+				<div class="field-pair equal">
+					${field('port','port',p.port||443,'number','min="1" max="65535"')}
+					<div data-atrust>${select('auth','authType',o.authType||'auth/psw',[['auth/psw','passwordAuth'],['auth/smsCheckCode','smsAuth']])}</div>
+				</div>
+				<div data-atrust>${field('domain','loginDomain',o.loginDomain||'','text',`placeholder="${t('automatic')}"`)}</div>
+			</section>
 			<section class="form-section">
 				<h2>${t('proxy')}</h2>
 				<div class="field-pair equal">
@@ -64,7 +63,8 @@ export function editor(p={}){
 			</section>
 			<section class="form-section">
 				<h2>${t('behavior')}</h2>
-				${check('tcpOnly',o)}
+				<div data-atrust>${check('tcpOnly',o)}</div>
+				${check('browserProxy',{browserProxy:o.browserProxy!==false})}
 				<div data-easy>
 					${['disableMultiLine','disableServerConfig','skipDomainResource','proxyAll'].map(k=>check(k,o)).join('')}
 				</div>
@@ -76,7 +76,6 @@ export function editor(p={}){
 		<div class="form-footer">
 			${p.id?button('remove','delete','danger'):''}
 			<span></span>
-			${button('cancel','goto-connections','quiet')}
 			<button type="submit" class="primary" data-action="save-profile">${t('save')}</button>
 		</div>
 	</form>`;
@@ -163,7 +162,9 @@ export function readProfile(form){
 	for(const k of ['tcpOnly','disableRemoteDNS','disableMultiLine','disableServerConfig','skipDomainResource','proxyAll']){
 		p.options[k]=d.has(k);
 	}
+	p.options.browserProxy=d.has('browserProxy');
 	if(p.protocol==='easyconnect'){
+		p.options.tcpOnly=false;
 		p.options.authType='auth/psw';
 		p.options.loginDomain='';
 	}

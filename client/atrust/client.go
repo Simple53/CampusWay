@@ -36,7 +36,7 @@ type Client struct {
 	dnsServer       string
 
 	MajorNodeGroup   string
-	NodeGroups       map[string][]string
+	NodeGroups       map[string]nodeGroup
 	BestNodes        map[string]string
 	BestNodesRWMutex sync.RWMutex
 
@@ -173,7 +173,6 @@ func SetTrusted(serverAddress string, serverPort int, authData []byte, trusted b
 			return err
 		}
 	}
-	log.DebugPrintf("Given auth data: %+v", clientAuthData)
 
 	if clientAuthData.DeviceID == "" {
 		clientAuthData.DeviceID = strings.ToLower(randHex(32))
@@ -240,7 +239,6 @@ func (c *Client) Setup(serverAddress string, serverPort int, username, password,
 				return nil, err
 			}
 		}
-		log.DebugPrintf("Given auth data: %+v", clientAuthData)
 
 		if clientAuthData.DeviceID == "" {
 			clientAuthData.DeviceID = strings.ToLower(randHex(32))
@@ -301,36 +299,31 @@ func (c *Client) Setup(serverAddress string, serverPort int, username, password,
 		c.SID = loginResult.SID
 		clientAuthData.Cookies = loginResult.Cookies
 
-		resourceData, err = sess.ClientResource()
-		if err != nil {
-			log.Println("Error fetching client resource:", err)
-			return nil, err
-		}
-
 		authData, err = json.Marshal(clientAuthData)
 		if err != nil {
-			log.Println("Error marshaling auth data:", err)
+			return nil, fmt.Errorf("encode authenticated session: %w", err)
+		}
+		resourceData, err = sess.ClientResource()
+		if err != nil {
+			return authData, fmt.Errorf("fetch client resources: %w", err)
 		}
 	}
 
 	err := c.parseResource(resourceData)
 	if err != nil {
-		return nil, err
+		return authData, fmt.Errorf("parse client resources: %w", err)
 	}
 
-	log.DebugPrintf("SID: %s, DeviceID: %s, ConnectionID: %s, SignKey: %s", c.SID, c.DeviceID, c.ConnectionID, c.SignKey)
+	c.BestNodes = c.probeNodes(c.lifecycleCtx)
 
-	c.BestNodes = getBestNodes(c.NodeGroups, c.underlayDialer.DialContext)
-
-	err = c.getIP()
-	if err != nil {
-		return nil, err
+	if err := c.getIP(); err != nil {
+		return authData, fmt.Errorf("aTrust virtual IP setup: %w", err)
 	}
 	c.underlayDialer.ExcludeIP(c.ip)
 
 	l3Tunnel, err := NewL3Tunnel(c)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create L3 tunnel: %v", err)
+		return authData, fmt.Errorf("failed to create L3 tunnel: %w", err)
 	}
 	c.l3TunnelMu.Lock()
 	c.l3Tunnel = l3Tunnel

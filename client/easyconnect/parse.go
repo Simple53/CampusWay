@@ -24,12 +24,16 @@ func (c *Client) parseLineListFromConfig(config string) error {
 		return err
 	}
 
-	element := doc.SelectElement("Conf").SelectElement("Mline")
+	root := doc.SelectElement("Conf")
+	if root == nil {
+		return errors.New("no Conf element found")
+	}
+	element := root.SelectElement("Mline")
 	if element == nil {
 		return errors.New("no Mline element found")
 	}
 
-	if element.SelectAttr("enable") == nil && element.SelectAttr("enable").Value != "1" {
+	if element.SelectAttrValue("enable", "0") != "1" {
 		return errors.New("server disable Mline")
 	}
 
@@ -74,15 +78,19 @@ func (c *Client) parseResources(resources string) error {
 	c.domainResources = make(map[string]client.DomainResource)
 	c.dnsResource = make(map[string]net.IP)
 
-	element := doc.SelectElement("Resource").SelectElement("Rcs")
+	root := doc.SelectElement("Resource")
+	if root == nil {
+		return errors.New("gateway returned no Resource element (session may have expired)")
+	}
+	element := root.SelectElement("Rcs")
 	if element == nil {
 		return errors.New("no Rcs element found")
 	}
 
 	for _, rc := range element.SelectElements("Rc") {
-		if rc.SelectAttr("type").Value == "1" || rc.SelectAttr("type").Value == "2" {
+		if rc.SelectAttrValue("type", "") == "1" || rc.SelectAttrValue("type", "") == "2" {
 			var protocol string
-			protoStr := rc.SelectAttr("proto").Value
+			protoStr := rc.SelectAttrValue("proto", "")
 			if protoStr == "-1" {
 				protocol = "all"
 			} else if protoStr == "0" {

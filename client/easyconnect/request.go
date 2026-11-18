@@ -89,11 +89,18 @@ func (c *Client) loginAuthAndPsw(graphCodeFile string) error {
 		log.Printf("VPN server version: %s", string(vpnMatch[1]))
 	}
 
-	c.twfID = string(regexp.MustCompile(`<TwfID>(.*)</TwfID>`).FindSubmatch(buf.Bytes())[1])
-	log.Printf("TWFID: %s", c.twfID)
+	twfMatch := regexp.MustCompile(`<TwfID>(.*)</TwfID>`).FindSubmatch(buf.Bytes())
+	if len(twfMatch) < 2 {
+		return errors.New("gateway did not return a login session")
+	}
+	c.twfID = string(twfMatch[1])
+	log.Println("Received login session")
 
-	rsaKey := string(regexp.MustCompile(`<RSA_ENCRYPT_KEY>(.*)</RSA_ENCRYPT_KEY>`).FindSubmatch(buf.Bytes())[1])
-	log.Printf("RSA key: %s", rsaKey)
+	rsaMatch := regexp.MustCompile(`<RSA_ENCRYPT_KEY>(.*)</RSA_ENCRYPT_KEY>`).FindSubmatch(buf.Bytes())
+	if len(rsaMatch) < 2 {
+		return errors.New("gateway did not return a password encryption key")
+	}
+	rsaKey := string(rsaMatch[1])
 
 	rsaExpMatch := regexp.MustCompile(`<RSA_ENCRYPT_EXP>(.*)</RSA_ENCRYPT_EXP>`).FindSubmatch(buf.Bytes())
 	rsaExp := ""
@@ -110,7 +117,6 @@ func (c *Client) loginAuthAndPsw(graphCodeFile string) error {
 	password := c.password
 	if csrfMatch != nil {
 		csrfCode = string(csrfMatch[1])
-		log.Printf("CSRF Code: %s", csrfCode)
 		password += "_" + csrfCode
 	} else {
 		log.Printf("Warning: No CSRF rand code")
@@ -128,10 +134,10 @@ func (c *Client) loginAuthAndPsw(graphCodeFile string) error {
 	}
 	encryptedPasswordHex := hex.EncodeToString(encryptedPassword)
 
-	rndImgMatch := regexp.MustCompile(`<RndImg>(.*)</RndImg>`).FindSubmatch(buf.Bytes())[1]
+	rndImgMatch := regexp.MustCompile(`<RndImg>(.*)</RndImg>`).FindSubmatch(buf.Bytes())
 	rndImg := "0"
 	if rndImgMatch != nil {
-		rndImg = string(rndImgMatch)
+		rndImg = string(rndImgMatch[1])
 	}
 
 	randCode := ""
@@ -242,7 +248,7 @@ func (c *Client) loginAuthAndPsw(graphCodeFile string) error {
 	twfIDMatch := regexp.MustCompile(`<TwfID>(.*)</TwfID>`).FindSubmatch(buf.Bytes())
 	if twfIDMatch != nil {
 		c.twfID = string(twfIDMatch[1])
-		log.Printf("Update TWFID: %s", c.twfID)
+		log.Println("Login session updated")
 	}
 
 	log.Printf("TWFID has been authorized")
@@ -325,7 +331,7 @@ func (c *Client) loginSMS() error {
 	twfIDMatch := regexp.MustCompile(`<TwfID>(.*)</TwfID>`).FindSubmatch(buf.Bytes())
 	if twfIDMatch != nil {
 		c.twfID = string(twfIDMatch[1])
-		log.Printf("Update TWFID: %s", c.twfID)
+		log.Println("Login session updated")
 	}
 	log.Print("SMS code verification success")
 
@@ -461,7 +467,7 @@ func (c *Client) loginCert() error {
 	twfIDMatch := regexp.MustCompile(`<TwfID>(.*)</TwfID>`).FindSubmatch(buf.Bytes())
 	if twfIDMatch != nil {
 		c.twfID = string(twfIDMatch[1])
-		log.Printf("Update TWFID: %s", c.twfID)
+		log.Println("Login session updated")
 	}
 
 	if strings.Contains(response, "<pwpErrorCode>16</pwpErrorCode>") {
@@ -588,6 +594,7 @@ func (c *Client) requestToken() error {
 		_ = dialConn.Close()
 	}(dialConn)
 	conn := utls.UClient(dialConn, &utls.Config{InsecureSkipVerify: true}, utls.HelloGolang)
+	_ = conn.SetDeadline(time.Now().Add(20 * time.Second))
 	defer func(conn *utls.UConn) {
 		_ = conn.Close()
 	}(conn)
@@ -607,17 +614,19 @@ func (c *Client) requestToken() error {
 	}
 
 	sessionID := hex.EncodeToString(conn.HandshakeState.ServerHello.SessionId)
-	log.Printf("Server session ID: %s", sessionID)
 
 	buf := make([]byte, 8)
 	n, err := conn.Read(buf)
-	if n == 0 || err != nil {
-		return errors.New("ECAgent request invalid: error " + err.Error() + "\n" + string(buf[:]))
+	if err != nil {
+		return fmt.Errorf("ECAgent request: %w", err)
+	}
+	if n == 0 || len(sessionID) < 31 || len(c.twfID) != 16 {
+		return errors.New("ECAgent request returned an invalid session")
 	}
 
 	c.token = (*[48]byte)([]byte(sessionID[:31] + "\x00" + c.twfID))
 
-	log.Printf("Token: %s", hex.EncodeToString(c.token[:]))
+	log.Println("Received data tunnel token")
 
 	return nil
 }
@@ -627,6 +636,12 @@ func (c *Client) requestIP() error {
 	if err != nil {
 		return err
 	}
+	ok := false
+	defer func() {
+		if !ok {
+			_ = conn.Close()
+		}
+	}()
 
 	// Request IP Packet
 	message := []byte{0x00, 0x00, 0x00, 0x00}
@@ -650,7 +665,7 @@ func (c *Client) requestIP() error {
 	log.DebugPrintf("Request IP: read %d bytes", n)
 	log.DebugDumpHex(reply[:n])
 
-	if reply[0] != 0x00 {
+	if n < 8 || reply[0] != 0x00 {
 		return errors.New("unexpected request IP reply")
 	}
 
@@ -663,6 +678,8 @@ func (c *Client) requestIP() error {
 	log.Printf("Client IP: %s", c.ip.String())
 
 	// Request IP conn CAN NOT be closed, otherwise tx/rx handshake will fail
+	ok = true
+	_ = conn.SetDeadline(time.Time{})
 	c.setRequestIPConn(conn)
 
 	return nil

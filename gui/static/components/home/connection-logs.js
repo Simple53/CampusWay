@@ -16,15 +16,15 @@ export function connectionLogs(){
 			</div>
 			<div class="module-actions" style="display:flex;align-items:center;gap:6px;">
 				<button type="button" class="icon-btn quiet" data-action="copy-logs" title="${t('copy')}" aria-label="${t('copy')}">${icon('copy')}</button>
-				<a href="#settings/diagnostics" class="icon-btn quiet" title="${t('allLogs')}" aria-label="${t('allLogs')}">${icon('arrow-right')}</a>
 			</div>
 		</div>
 		<div class="console-container" id="home-log-console">
 			${logs.length ? `
 				<div class="console-viewport">
 					${logs.map(l=>`
-						<div class="console-row">
+						<div class="console-row level-${esc(l.level||'info')}">
 							<span class="console-ts">${clock(l.time)}</span>
+							<span class="log-level">${esc((l.level||'info').toUpperCase())}</span>
 							<span class="console-text">${esc(message(l.message))}</span>
 						</div>
 					`).join('')}

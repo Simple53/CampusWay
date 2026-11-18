@@ -2,7 +2,7 @@ import {t} from '../../core/i18n.js';
 import {store,selected,active} from '../../core/store.js';
 import {esc,icon} from '../../core/ui.js';
 
-function getTemplateSites(p){
+export function getTemplateSites(p){
 	if(!p) return [
 		{name: 'Apple', url: 'https://www.apple.com'},
 		{name: 'GitHub', url: 'https://github.com'},
@@ -22,9 +22,9 @@ function getTemplateSites(p){
 	if(s.includes('zju') || s.includes('浙大')){
 		return [
 			{name: '浙大办公网', url: 'https://service.zju.edu.cn'},
-			{name: '教务系统', url: 'https://jwgl.zju.edu.cn'},
+			{name: '教务系统', url: 'http://zdbk.zju.edu.cn/'},
 			{name: '图书资源', url: 'https://lib.zju.edu.cn'},
-			{name: '知网 (CNKI)', url: 'https://www.cnki.net'}
+			{name: 'CC98', url: 'http://cc98.org/'}
 		];
 	}
 	if(s.includes('nnu') || s.includes('njnu') || s.includes('南师')){
@@ -51,38 +51,38 @@ function siteLogo(name){
 	return `<svg class="site-icon" viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>`;
 }
 
-export function networkDiag(){
-	const r=store.diagReport,testing=store.diagTesting;
-	const p = active() || selected();
-	const templateSites = getTemplateSites(p);
-	const rows = (r?.targets?.length ? r.targets : templateSites).slice(0, 4);
+export function websiteURL(value) {
+	try {
+		const u = new URL(value);
+		if ((u.protocol === 'https:' || u.protocol === 'http:') && !u.username && !u.password) return u.href;
+	} catch {}
+	return '';
+}
 
+export function networkDiag(){
+	const {diagReport,diagTesting,snapshot}=store;
+	const links=snapshot.preferences.websiteLinks?.length?snapshot.preferences.websiteLinks:getTemplateSites(active()||selected());
 	return `<section class="home-module diag-module" aria-labelledby="diag-title">
 		<div class="module-heading">
-			<div style="display:flex;align-items:center;gap:8px;">
-				<span class="icon-accent" style="color:var(--accent);">${icon('wifi')}</span>
-				<h2 id="diag-title">${t('siteTest')}</h2>
-			</div>
-			<div style="display:flex;align-items:center;gap:6px;">
-				<button type="button" class="icon-btn quiet btn-sm ${testing?'spin':''}" data-action="run-diag" title="${t('testNow')}" aria-label="${t('testNow')}">
-					${icon(testing?'refresh':'zap')}
-				</button>
+			<h2 id="diag-title">${t('websiteLinks')}</h2>
+			<div class="website-actions">
+				<button type="button" class="icon-btn quiet btn-sm" data-action="edit-links" title="${t('editLinks')}" aria-label="${t('editLinks')}">${icon('pencil')}</button>
+				<button type="button" class="icon-btn quiet btn-sm ${diagTesting?'spin':''}" data-action="run-diag" title="${t('testNow')}" aria-label="${t('testNow')}" ${diagTesting?'disabled':''}>${icon(diagTesting?'refresh':'zap')}</button>
 			</div>
 		</div>
+		<p class="hint website-hint">${t('linkActions')}</p>
 		<div class="site-test-grid">
-			${rows.map(item => {
-				const match = r?.targets?.find(x => x.name.toLowerCase() === item.name.toLowerCase()) || (r?.targets?.length ? null : item);
-				const hasResult = match && match.ms !== undefined;
-				const statusText = testing ? '...' : (hasResult ? `${match.ms}ms` : t('test'));
-				const isOk = match?.ok;
-				return `
-					<div class="site-card" data-action="run-diag" role="button" tabindex="0">
-						<div class="site-card-icon">${siteLogo(item.name)}</div>
-						<span class="site-card-name">${esc(item.name)}</span>
-						<div class="site-card-divider"></div>
-						<span class="site-card-status ${hasResult ? (isOk ? 'ok' : 'err') : ''}">${statusText}</span>
-					</div>
-				`;
+			${links.map(item => {
+				const url=websiteURL(item.url);
+				if(!url)return '';
+				const report=diagReport?.targets?.find(x=>websiteURL(x.url)===url);
+				const result=report&&!report.skipped;
+				const label=item.name||new URL(url).hostname;
+				return `<button type="button" class="site-card" data-action="website-link" data-url="${esc(url)}" title="${esc(url)}">
+					<span class="site-card-icon">${siteLogo(label)}</span>
+					<span class="site-card-name">${esc(label)}</span>
+					${result?`<span class="site-card-status ${report.ok?'ok':'err'}">${report.ok?`${report.ms} ms`:t('error')}</span>`:''}
+				</button>`;
 			}).join('')}
 		</div>
 	</section>`;

@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nnu-connect/nnu-connect/internal/dnsutil"
+
 	tun "github.com/mythologyli/sing-tun"
 	"github.com/sagernet/sing/common/logger"
 )
@@ -87,6 +89,16 @@ func (d *Dialer) ExcludeIP(ip net.IP) {
 }
 
 func (d *Dialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
+	host, port, splitErr := net.SplitHostPort(address)
+	if splitErr == nil && net.ParseIP(host) == nil {
+		lookupCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
+		ips, err := dnsutil.LookupIP(lookupCtx, net.DefaultResolver, "ip4", host)
+		cancel()
+		if err != nil {
+			return nil, err
+		}
+		address = net.JoinHostPort(ips[0].String(), port)
+	}
 	if d == nil {
 		return (&net.Dialer{}).DialContext(ctx, network, address)
 	}

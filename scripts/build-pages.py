@@ -67,7 +67,7 @@ def build_pages(output_dir: Path | None = None) -> Path:
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description='Build static CampusWay preview site for GitHub Pages.')
+    parser = argparse.ArgumentParser(description='Build static RouteDesk preview site for GitHub Pages.')
     parser.add_argument('--output', type=Path, default=None)
     args = parser.parse_args()
     target = build_pages(args.output)

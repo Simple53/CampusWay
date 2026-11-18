@@ -6,9 +6,9 @@ export function formatBytes(bytes){if(!Number.isFinite(bytes)||bytes<0)return 'â
 
 function backgroundLineplot(history){
 	const w=320,h=72,pad=2,n=history.length;
-	if(n<2)return '';
+	if(n<2)history=[{down:0,up:0},...history,{down:0,up:0}];
 	const max=Math.max(1,...history.map(p=>Math.max(p.down,p.up)));
-	const x=i=>(i*(w/(history.length-1))).toFixed(1),y=v=>(h-pad-(v/max)*(h-pad*1.8)).toFixed(1);
+	const x=i=>(i*(w/(history.length-1))).toFixed(1),y=v=>(h-pad-(v/max)*(h-2*pad)).toFixed(1);
 	const line=k=>history.map((p,i)=>`${x(i)},${y(p[k])}`).join(' ');
 	return `<svg class="speed-lineplot-bg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true">
 		<defs>
@@ -40,7 +40,6 @@ export function networkSpeed(){
 			` : `<span class="module-caption">${t(s.preview?'simulatedTraffic':'proxyTraffic')}</span>`}
 		</div>
 		<div class="speed-content-wrap">
-			${backgroundLineplot(live?store.speedHistory:[])}
 			<div class="speed-values-compact">
 				<div class="speed-metric down">
 					<span class="speed-label">${icon('arrow-down')} ${t('downloadSpeed')}</span>
@@ -54,5 +53,6 @@ export function networkSpeed(){
 				</div>
 			</div>
 		</div>
+		<div class="speed-chart">${backgroundLineplot(live?store.speedHistory:[])}</div>
 	</section>`;
 }

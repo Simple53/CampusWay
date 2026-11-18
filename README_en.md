@@ -1,6 +1,6 @@
 <div align="center">
-  <img src="build/assets/campusway.png" width="96" height="96" alt="CampusWay Icon" />
-  <h1>CampusWay</h1>
+  <img src="build/assets/campusway.png" width="96" height="96" alt="RouteDesk Icon" />
+  <h1>RouteDesk</h1>
   <p><strong>Cross-platform Campus VPN Connection Manager for EasyConnect and aTrust</strong></p>
   <p><strong>支持 EasyConnect 与 aTrust 协议的跨平台校园网连接客户端与多线路管理器</strong></p>
   <p>
@@ -19,13 +19,13 @@
 >
 > This software is provided **as-is**, without any express or implied warranty. Users are responsible for complying with their university network policies.
 > - The desktop GUI currently provides **loopback proxy mode** (`SOCKS5 127.0.0.1:1080` and `HTTP 127.0.0.1:1081` by default, configurable per profile). Traffic counters measure TCP traffic forwarded through the local proxies rather than device-wide system interfaces.
-> - For full system TUN routing, port forwarding, Docker containers, or headless router/daemon deployments, use the **`campusway-cli`** binary included in releases.
+> - For full system TUN routing, port forwarding, Docker containers, or headless router/daemon deployments, use the **`routedesk-cli`** binary included in releases.
 
 ---
 
 ## 📖 Overview
 
-**CampusWay** is a lightweight, standalone campus network connection manager that eliminates the need for bloated vendor EasyConnect/aTrust background services. Built in Go with a compact **Wails** desktop interface and an offline-capable browser interaction preview, it lets you manage multiple campus gateways, authentication profiles, and custom routing rules cleanly in one place.
+**RouteDesk** is a lightweight, standalone campus network connection manager that eliminates the need for bloated vendor EasyConnect/aTrust background services. Built in Go with a compact **Wails** desktop interface and an offline-capable browser interaction preview, it lets you manage multiple campus gateways, authentication profiles, and custom routing rules cleanly in one place.
 
 - **Repository**: [https://github.com/Simple53/CampusWay](https://github.com/Simple53/CampusWay)
 - **Live Interactive Web Preview**: [https://simple53.github.io/CampusWay/](https://simple53.github.io/CampusWay/)
@@ -66,37 +66,37 @@ Official release packages are built automatically via GitHub Actions and publish
 > ⚠️ Desktop packages are currently unsigned. You may need to allow execution once in Windows SmartScreen or macOS Gatekeeper.
 
 ### Windows (x64) Desktop
-- **Installer**: Download **`CampusWay-<version>-windows-x64-setup.exe`** for a standard NSIS installation with Start Menu shortcuts and an uninstaller (requires WebView2 Runtime, preinstalled on Windows 10/11).
-- **Portable**: Download **`CampusWay-<version>-windows-x64-portable.zip`**, extract, and launch **`CampusWay.exe`** directly.
+- **Installer**: Download **`RouteDesk-<version>-windows-x64-setup.exe`** for a standard NSIS installation with Start Menu shortcuts and an uninstaller (requires WebView2 Runtime, preinstalled on Windows 10/11).
+- **Portable**: Download **`RouteDesk-<version>-windows-x64-portable.zip`**, extract, and launch **`RouteDesk.exe`** directly.
 
 ### macOS (Apple Silicon & Intel) Desktop
-- **Apple Silicon**: Download **`CampusWay-<version>-macos-arm64.dmg`**.
-- **Intel Mac**: Download **`CampusWay-<version>-macos-x64.dmg`**.
-- Drag `CampusWay.app` into `/Applications`. If Gatekeeper flags the unsigned app on first launch, run `xattr -cr /Applications/CampusWay.app` or allow it in *System Settings -> Privacy & Security*.
+- **Apple Silicon**: Download **`RouteDesk-<version>-macos-arm64.dmg`**.
+- **Intel Mac**: Download **`RouteDesk-<version>-macos-x64.dmg`**.
+- Drag `RouteDesk.app` into `/Applications`. If Gatekeeper flags the unsigned app on first launch, run `xattr -cr /Applications/RouteDesk.app` or allow it in *System Settings -> Privacy & Security*.
 
 ### Linux (x64) Desktop
-- **Debian / Ubuntu**: Download **`CampusWay-<version>-linux-x64.deb`** and install via:
+- **Debian / Ubuntu**: Download **`RouteDesk-<version>-linux-x64.deb`** and install via:
   ```bash
-  sudo apt install ./CampusWay-<version>-linux-x64.deb
+  sudo apt install ./RouteDesk-<version>-linux-x64.deb
   ```
-- **Tarball**: Download **`CampusWay-<version>-linux-x64.tar.gz`** (requires `libgtk-3-0` and `libwebkit2gtk-4.1-0`).
+- **Tarball**: Download **`RouteDesk-<version>-linux-x64.tar.gz`** (requires `libgtk-3-0` and `libwebkit2gtk-4.1-0`).
 
-### Command-Line Client (`campusway-cli`), Docker & System Services
+### Command-Line Client (`routedesk-cli`), Docker & System Services
 Recommended for headless servers, OpenWrt routers, Docker containers, or full TUN mode:
 - **Archives**:
-  - Windows: `campusway-cli-<version>-windows-x64.zip`, `campusway-cli-<version>-windows-arm64.zip`
-  - macOS: `campusway-cli-<version>-macos-arm64.tar.gz`, `campusway-cli-<version>-macos-x64.tar.gz`
-  - Linux: `campusway-cli-<version>-linux-x64.tar.gz`, `campusway-cli-<version>-linux-arm64.tar.gz`
+  - Windows: `routedesk-cli-<version>-windows-x64.zip`, `routedesk-cli-<version>-windows-arm64.zip`
+  - macOS: `routedesk-cli-<version>-macos-arm64.tar.gz`, `routedesk-cli-<version>-macos-x64.tar.gz`
+  - Linux: `routedesk-cli-<version>-linux-x64.tar.gz`, `routedesk-cli-<version>-linux-arm64.tar.gz`
 - **Quick Start**:
   ```bash
-  ./campusway-cli -protocol easyconnect -server vpn.example.edu.cn -username <student_id> -password <password>
+  ./routedesk-cli -protocol easyconnect -server vpn.example.edu.cn -username <student_id> -password <password>
   # Or load from a TOML configuration file (see config.toml.example):
-  ./campusway-cli -config config.toml
+  ./routedesk-cli -config config.toml
   ```
 - See [Docker Deployment Guide](docs/docker_en.md) and [System Service Guide (Linux / macOS / OpenWrt)](docs/service_en.md) for daemon setups.
 
 ### Android Core Binding (`.aar`)
-- **`CampusWay-<version>-android-aar.zip`** is built with `gomobile` for integrating the core EasyConnect tunnel into native Android `VpnService` clients. Full mobile UI apps remain under development.
+- **`RouteDesk-<version>-android-aar.zip`** is built with `gomobile` for integrating the core EasyConnect tunnel into native Android `VpnService` clients. Full mobile UI apps remain under development.
 
 ---
 
@@ -127,7 +127,7 @@ Explore the full UI flow directly in your browser without connecting to any live
 # 2. Run all automated checks (Go test/vet, JS tests, preview HTTP & Pages tests)
 ./scripts/check.ps1
 
-# 3. Build Windows Desktop & CLI locally into dist/campusway/
+# 3. Build Windows Desktop & CLI locally into dist/routedesk/
 ./build.ps1 -WithCLI
 
 # 4. Run engine worker cancellation and secret-redaction smoke check

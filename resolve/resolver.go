@@ -9,10 +9,12 @@ import (
 	"time"
 
 	"github.com/nnu-connect/nnu-connect/client"
+	"github.com/nnu-connect/nnu-connect/internal/dnsutil"
 	"github.com/nnu-connect/nnu-connect/internal/ippool"
 	"github.com/nnu-connect/nnu-connect/log"
 	"github.com/nnu-connect/nnu-connect/stack"
 	"github.com/patrickmn/go-cache"
+	"golang.org/x/sync/singleflight"
 )
 
 type Resolver struct {
@@ -32,10 +34,7 @@ type Resolver struct {
 	useTCP bool
 	// check to use tcp resolver or udp resolver
 	tcpLock sync.RWMutex
-	// check to handle concurrent same dns query
-	// only the goroutine which get the lock can use remoteResolver
-	// MUST handler lock/unlock carefully!
-	concurResolveLock sync.Map
+	lookups singleflight.Group
 
 	closeOnce sync.Once
 }
@@ -55,18 +54,28 @@ func (r *Resolver) Resolve(ctx context.Context, host string) (resCtx context.Con
 			resCtx = context.WithValue(resCtx, ContextKeyResolveHost, host)
 		}
 	}()
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
 	var domainResourceFound = false
 	var domainResource client.DomainResource
-	if r.domainResources != nil {
-		for domain, resource := range r.domainResources {
-			if strings.HasSuffix(host, domain) {
-				domainResourceFound = true
-				domainResource = resource
-				ctx = context.WithValue(ctx, ContextKeyDomainResource, resource)
-				log.DebugPrintf("Domain resource found: %s", domain)
-				break
-			}
+	var bestLength int
+	for domain, resource := range r.domainResources {
+		exact := !strings.HasPrefix(domain, ".") && !strings.HasPrefix(domain, "*")
+		domain = strings.TrimPrefix(strings.TrimPrefix(strings.ToLower(domain), "*"), ".")
+		if host != domain && !strings.HasSuffix(host, "."+domain) {
+			continue
 		}
+		score := 2 * len(domain)
+		if exact {
+			score++
+		}
+		if score > bestLength {
+			bestLength = score
+			domainResourceFound = true
+			domainResource = resource
+		}
+	}
+	if domainResourceFound {
+		ctx = context.WithValue(ctx, ContextKeyDomainResource, domainResource)
 	}
 
 	if cachedIP, found := r.getDNSCache(host); found {
@@ -95,65 +104,56 @@ func (r *Resolver) Resolve(ctx context.Context, host string) (resCtx context.Con
 		}
 	}
 
-	if r.useRemoteDNS {
-		r.tcpLock.RLock()
-		useTCP := r.useTCP
-		r.tcpLock.RUnlock()
-		resolveLockItem, _ := r.concurResolveLock.LoadOrStore(host, new(sync.Mutex))
-		resolveLock := resolveLockItem.(*sync.Mutex)
-		if resolveLock.TryLock() {
-			if !useTCP {
-				ips, err := r.remoteUDPResolver.LookupIP(context.Background(), "ip4", host)
-				if err != nil {
-					if ips, err = r.remoteTCPResolver.LookupIP(context.Background(), "ip4", host); err != nil {
-						resolveLock.Unlock()
-						// All remote DNS failed, so we keep do nothing but use secondary dns
-						log.Printf("Resolve IPv4 addr failed using remote UDP/TCP DNS: %s, using secondary DNS instead", host)
-						return r.ResolveWithSecondaryDNS(ctx, host)
-					} else {
-						r.tcpLock.Lock()
-						r.useTCP = true
-						if r.timer == nil {
-							r.timer = time.AfterFunc(10*time.Minute, func() {
-								r.tcpLock.Lock()
-								r.useTCP = false
-								r.timer = nil
-								r.tcpLock.Unlock()
-							})
-						}
-						r.tcpLock.Unlock()
-					}
-				}
-				// Set DNS cache if tcp or udp DNS success
-				r.setDNSCache(host, ips[0])
-				resolveLock.Unlock()
-				log.Printf("%s -> %s", host, ips[0].String())
-				return ctx, ips[0], nil
-			} else {
-				// Only try tcp and secondary DNS
-				if ips, err := r.remoteTCPResolver.LookupIP(context.Background(), "ip4", host); err != nil {
-					resolveLock.Unlock()
-					log.Printf("Resolve IPv4 addr failed using remote TCP DNS: %s, using secondary DNS instead", host)
-					return r.ResolveWithSecondaryDNS(ctx, host)
-				} else {
-					r.setDNSCache(host, ips[0])
-					resolveLock.Unlock()
-					log.Printf("%s -> %s", host, ips[0].String())
-					return ctx, ips[0], nil
-				}
-			}
-		} else {
-			// waiting dns query for remoteResolve finish
-			resolveLock.Lock()
-			resolveLock.Unlock()
-			// if host handled by remoteResolver, it must exist in DNSCache
-			if cachedIP, found := r.getDNSCache(host); found {
-				return ctx, cachedIP, nil
-			}
-			return r.ResolveWithSecondaryDNS(ctx, host)
+	result := r.lookups.DoChan(host, func() (any, error) {
+		if ip, ok := r.getDNSCache(host); ok {
+			return ip, nil
 		}
-	} else {
-		return r.ResolveWithSecondaryDNS(ctx, host)
+		query, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		if r.useRemoteDNS {
+			r.tcpLock.RLock()
+			useTCP := r.useTCP
+			r.tcpLock.RUnlock()
+			if !useTCP {
+				if ips, err := lookupRemote(query, r.remoteUDPResolver, host, 900*time.Millisecond); err == nil {
+					r.setDNSCache(host, ips[0])
+					return ips[0], nil
+				}
+			}
+			if ips, err := lookupRemote(query, r.remoteTCPResolver, host, 1500*time.Millisecond); err == nil {
+				if !useTCP {
+					r.tcpLock.Lock()
+					r.useTCP = true
+					if r.timer == nil {
+						r.timer = time.AfterFunc(10*time.Minute, func() {
+							r.tcpLock.Lock()
+							r.useTCP = false
+							r.timer = nil
+							r.tcpLock.Unlock()
+						})
+					}
+					r.tcpLock.Unlock()
+				}
+				r.setDNSCache(host, ips[0])
+				return ips[0], nil
+			}
+		}
+		_, ip, err := r.ResolveWithSecondaryDNS(query, host)
+		if err == nil {
+			r.setDNSCache(host, ip)
+		}
+		return ip, err
+	})
+	select {
+	case <-ctx.Done():
+		return ctx, nil, ctx.Err()
+	case resolved := <-result:
+		if resolved.Err != nil {
+			return ctx, nil, resolved.Err
+		}
+		ip := resolved.Val.(net.IP)
+		log.Printf("%s -> %s", host, ip)
+		return ctx, ip, nil
 	}
 }
 
@@ -174,10 +174,10 @@ func (r *Resolver) RemoteTCPResolver() (*net.Resolver, error) {
 }
 
 func (r *Resolver) ResolveWithSecondaryDNS(ctx context.Context, host string) (context.Context, net.IP, error) {
-	if targets, err := r.secondaryResolver.LookupIP(ctx, "ip4", host); err != nil {
+	if targets, err := dnsutil.LookupIP(ctx, r.secondaryResolver, "ip4", host); err != nil {
 		log.Printf("Resolve IPv4 addr failed using secondary DNS: %s. Try IPv6 addr", host)
 
-		if targets, err = r.secondaryResolver.LookupIP(ctx, "ip6", host); err != nil {
+		if targets, err = dnsutil.LookupIP(ctx, r.secondaryResolver, "ip6", host); err != nil {
 			log.Printf("Resolve IPv6 addr failed using secondary DNS: %s", host)
 			return ctx, nil, err
 		} else {
@@ -201,7 +201,6 @@ func (r *Resolver) Close() {
 	})
 }
 
-
 func NewResolver(stack stack.Stack, remoteDNSServer, secondaryDNSServer string, ttl uint64, domainResources map[string]client.DomainResource, dnsResource map[string]net.IP, useRemoteDNS bool) *Resolver {
 	//domainSuffixTree := domainsuffixtrie.NewDomainSuffixTrie[bool]()
 	//for domain := range domainResource {
@@ -212,7 +211,10 @@ func NewResolver(stack stack.Stack, remoteDNSServer, secondaryDNSServer string, 
 		remoteUDPResolver: &net.Resolver{
 			PreferGo: true,
 			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-				return stack.DialUDP(context.Background(), &net.UDPAddr{
+				if strings.HasPrefix(network, "tcp") {
+					return stack.DialTCP(ctx, &net.TCPAddr{IP: net.ParseIP(remoteDNSServer), Port: 53})
+				}
+				return stack.DialUDP(ctx, &net.UDPAddr{
 					IP:   net.ParseIP(remoteDNSServer),
 					Port: 53,
 				})
@@ -221,27 +223,24 @@ func NewResolver(stack stack.Stack, remoteDNSServer, secondaryDNSServer string, 
 		remoteTCPResolver: &net.Resolver{
 			PreferGo: true,
 			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-				return stack.DialTCP(context.Background(), &net.TCPAddr{
+				return stack.DialTCP(ctx, &net.TCPAddr{
 					IP:   net.ParseIP(remoteDNSServer),
 					Port: 53,
 				})
 			},
 		},
-		ttl:              ttl,
-		domainResources:  domainResources,
-		dnsResource:      dnsResource,
-		dnsCache:         cache.New(time.Duration(ttl)*time.Second, time.Duration(ttl)*2*time.Second),
-		useRemoteDNS: useRemoteDNS,
+		ttl:             ttl,
+		domainResources: domainResources,
+		dnsResource:     dnsResource,
+		dnsCache:        cache.New(time.Duration(ttl)*time.Second, time.Duration(ttl)*2*time.Second),
+		useRemoteDNS:    useRemoteDNS,
 	}
 
 	if secondaryDNSServer != "" {
 		resolver.secondaryResolver = &net.Resolver{
 			PreferGo: true,
 			Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-				return net.DialUDP(network, nil, &net.UDPAddr{
-					IP:   net.ParseIP(secondaryDNSServer),
-					Port: 53,
-				})
+				return (&net.Dialer{}).DialContext(ctx, network, net.JoinHostPort(secondaryDNSServer, "53"))
 			},
 		}
 	} else {
@@ -256,4 +255,23 @@ func NewResolver(stack stack.Stack, remoteDNSServer, secondaryDNSServer string, 
 	}
 
 	return resolver
+}
+
+func lookupRemote(ctx context.Context, resolver *net.Resolver, host string, timeout time.Duration) ([]net.IP, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	ips, err := resolver.LookupIP(ctx, "ip4", host)
+	if err != nil {
+		return nil, err
+	}
+	var real []net.IP
+	for _, ip := range ips {
+		if !dnsutil.IsFakeIP(ip) {
+			real = append(real, ip)
+		}
+	}
+	if len(real) == 0 {
+		return nil, errors.New("campus DNS returned no real addresses")
+	}
+	return real, nil
 }

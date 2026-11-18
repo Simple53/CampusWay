@@ -16,10 +16,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/nnu-connect/nnu-connect/engine"
 )
 
 // Connection options group protocol, DNS and local-proxy settings per route.
 type ConnectionOptions struct {
+	BrowserProxy        *bool  `json:"browserProxy,omitempty"`
 	AuthType            string `json:"authType"`
 	LoginDomain         string `json:"loginDomain"`
 	SocksPort           int    `json:"socksPort"`
@@ -47,16 +50,24 @@ type Profile struct {
 	Remember      bool              `json:"remember"`
 	HasPassword   bool              `json:"hasPassword"`
 }
+type WidgetDimensions struct {
+	Columns int `json:"columns"`
+	Height  int `json:"height"`
+}
 type Preferences struct {
-	Accent      string            `json:"accent"`
-	Language    string            `json:"language"`
-	Theme       string            `json:"theme"`
-	View        string            `json:"view"`
-	Density     string            `json:"density"`
-	Sort        string            `json:"sort"`
-	Widgets     []string          `json:"widgets"`
-	WidgetSizes map[string]string `json:"widgetSizes"`
-	CloseAction string            `json:"closeAction"`
+	DNS              DNSOverrides                `json:"dns"`
+	AutoUpdate       *bool                       `json:"autoUpdate,omitempty"`
+	WidgetDimensions map[string]WidgetDimensions `json:"widgetDimensions,omitempty"`
+	WebsiteLinks     []WebsiteLink               `json:"websiteLinks,omitempty"`
+	Accent           string                      `json:"accent"`
+	Language         string                      `json:"language"`
+	Theme            string                      `json:"theme"`
+	View             string                      `json:"view"`
+	Density          string                      `json:"density"`
+	Sort             string                      `json:"sort"`
+	Widgets          []string                    `json:"widgets"`
+	WidgetSizes      map[string]string           `json:"widgetSizes"`
+	CloseAction      string                      `json:"closeAction"`
 }
 type storedConfig struct {
 	Version     int         `json:"version"`
@@ -72,6 +83,7 @@ type TrafficSnapshot struct {
 	SampledAt    int64   `json:"sampledAt"`
 }
 type Event struct {
+	Session *engine.Session  `json:"session,omitempty"`
 	Traffic *TrafficSnapshot `json:"traffic,omitempty"`
 	Kind    string           `json:"kind"`
 	State   string           `json:"state,omitempty"`
@@ -83,8 +95,11 @@ type LogEntry struct {
 	Seq     uint64 `json:"seq"`
 	Time    string `json:"time"`
 	Message string `json:"message"`
+	Level   string `json:"level"`
 }
 type Snapshot struct {
+	TunnelIP    string           `json:"tunnelIP,omitempty"`
+	Version     string           `json:"version"`
 	Traffic     *TrafficSnapshot `json:"traffic"`
 	Profiles    []Profile        `json:"profiles"`
 	Preferences Preferences      `json:"preferences"`
@@ -98,6 +113,10 @@ type Snapshot struct {
 	CanRemember bool             `json:"canRemember"`
 }
 type AppServer struct {
+	tunnelIP               string
+	quitForUpdate          func()
+	updateMu               sync.Mutex
+	restoreProxy           func() error
 	traffic                *TrafficSnapshot
 	mu                     sync.Mutex
 	operation              sync.Mutex
@@ -145,6 +164,9 @@ func newAppAt(dir string) *AppServer {
 	}
 	for i := range s.config.Profiles {
 		p := &s.config.Profiles[i]
+		if p.Protocol == "easyconnect" {
+			p.Options.TCPOnly = false
+		}
 		if len(p.ID) != 32 {
 			s.startupErr = errors.New("Invalid saved profile identifier")
 			continue
@@ -161,6 +183,8 @@ func newAppAt(dir string) *AppServer {
 	}
 	return s
 }
+
+// Keep the original profile directory so upgrades retain sessions and settings.
 func newApp() *AppServer {
 	dir, err := os.UserConfigDir()
 	if err != nil {
@@ -219,6 +243,9 @@ func validateProfile(p *Profile) error {
 	}
 
 	o := &p.Options
+	if p.Protocol == "easyconnect" {
+		o.TCPOnly = false
+	}
 	if o.AuthType == "" {
 		o.AuthType = "auth/psw"
 	}
@@ -380,6 +407,9 @@ func (s *AppServer) SaveProfile(p Profile, password string) (Profile, error) {
 	if changed && oldID != "" {
 		_ = deleteCredential(s.secretPath(oldID))
 	}
+	if changed || password != "" || !p.Remember {
+		_ = deleteCredential(s.sessionPath(oldID))
+	}
 	return p, nil
 }
 func (s *AppServer) DeleteProfile(id string) error {
@@ -418,6 +448,7 @@ func (s *AppServer) DeleteProfile(id string) error {
 		return err
 	}
 	s.config = c
+	_ = deleteCredential(s.sessionPath(id))
 	return nil
 }
 func (s *AppServer) SelectProfile(id string) error {
@@ -437,6 +468,9 @@ func (s *AppServer) SelectProfile(id string) error {
 	return errors.New("Profile no longer exists")
 }
 func (s *AppServer) SavePreferences(p Preferences) error {
+	if err := p.DNS.validate(); err != nil {
+		return err
+	}
 	if p.Accent == "" {
 		p.Accent = "graphite"
 	}
@@ -468,6 +502,24 @@ func (s *AppServer) SavePreferences(p Preferences) error {
 		}
 	}
 	p.WidgetSizes = cleanSizes
+	dimensions := map[string]WidgetDimensions{}
+	for widget, size := range p.WidgetDimensions {
+		if oneOf(widget, "status", "speed", "diag", "logs") && size.Columns >= 4 && size.Columns <= 12 && size.Height >= 0 && size.Height <= 720 {
+			dimensions[widget] = size
+		}
+	}
+	p.WidgetDimensions = dimensions
+	if len(p.WebsiteLinks) > 12 {
+		return errors.New("Save up to 12 websites")
+	}
+	for i, site := range p.WebsiteLinks {
+		site.Name = strings.TrimSpace(site.Name)
+		site.URL = strings.TrimSpace(site.URL)
+		if _, err := parseWebsiteURL(site.URL); err != nil || len(site.Name) > 160 {
+			return errors.New("Enter a valid HTTP or HTTPS website")
+		}
+		p.WebsiteLinks[i] = site
+	}
 	// nil means "never customised" (show everything); an empty list is a valid
 	// choice and hides every widget. Unknown ids and duplicates are dropped.
 	if p.Widgets == nil {
@@ -492,6 +544,7 @@ func (s *AppServer) SavePreferences(p Preferences) error {
 	s.config = c
 	return nil
 }
+
 // MinimizeWindow 响应前端最小化按钮操作，将窗口最小化或隐藏至托盘
 func (s *AppServer) MinimizeWindow() error {
 	s.mu.Lock()
@@ -523,7 +576,11 @@ func (s *AppServer) GetSnapshot() Snapshot {
 		v := *s.traffic
 		trafficCopy = &v
 	}
-	return Snapshot{Traffic: trafficCopy, Profiles: append([]Profile{}, s.config.Profiles...), Preferences: s.config.Preferences, Selected: s.config.Selected, Active: s.active, State: s.state, Message: msg, ConnectedAt: s.connectedAt, Challenge: s.challenge, Logs: append([]LogEntry{}, s.logs...), CanRemember: canRemember()}
+	tunnelIP := ""
+	if s.state == "connected" {
+		tunnelIP = s.tunnelIP
+	}
+	return Snapshot{TunnelIP: tunnelIP, Version: version, Traffic: trafficCopy, Profiles: append([]Profile{}, s.config.Profiles...), Preferences: s.config.Preferences, Selected: s.config.Selected, Active: s.active, State: s.state, Message: msg, ConnectedAt: s.connectedAt, Challenge: s.challenge, Logs: append([]LogEntry{}, s.logs...), CanRemember: canRemember()}
 }
 func (s *AppServer) dailyLogPath() string {
 	dir := filepath.Join(s.dir, "logs")
@@ -531,14 +588,14 @@ func (s *AppServer) dailyLogPath() string {
 	return filepath.Join(dir, time.Now().Format("2006-01-02")+".log")
 }
 
-func (s *AppServer) writeDailyLog(msg string) {
+func (s *AppServer) writeDailyLog(msg, level string) {
 	path := s.dailyLogPath()
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		return
 	}
 	defer f.Close()
-	_, _ = f.WriteString(fmt.Sprintf("%s %s\n", time.Now().Format(time.RFC3339), msg))
+	_, _ = f.WriteString(fmt.Sprintf("%s [%s] %s\n", time.Now().Format(time.RFC3339), strings.ToUpper(level), msg))
 }
 
 func (s *AppServer) ExportDailyLogs() (string, error) {
@@ -563,12 +620,17 @@ func (s *AppServer) record(state, message string) {
 	s.state = state
 	s.message = message
 	s.seq++
-	s.logs = append(s.logs, LogEntry{s.seq, time.Now().Format(time.RFC3339), message})
+	level := logLevel(message)
+	if state == "error" {
+		level = "error"
+	}
+	s.logs = append(s.logs, LogEntry{Seq: s.seq, Time: time.Now().Format(time.RFC3339), Message: message, Level: level})
 	if len(s.logs) > 500 {
 		s.logs = s.logs[len(s.logs)-500:]
 	}
-	s.writeDailyLog(message)
+	s.writeDailyLog(message, level)
 }
+
 // rememberPassword stores the credential with DPAPI, reads it back to prove the
 // round trip works, and only then flips the profile flags on disk.
 // The caller must hold s.mu.
@@ -599,11 +661,11 @@ func (s *AppServer) rememberPassword(id, password string) error {
 // The caller must hold s.mu.
 func (s *AppServer) warn(message string) {
 	s.seq++
-	s.logs = append(s.logs, LogEntry{s.seq, time.Now().Format(time.RFC3339), message})
+	s.logs = append(s.logs, LogEntry{Seq: s.seq, Time: time.Now().Format(time.RFC3339), Message: message, Level: logLevel(message)})
 	if len(s.logs) > 500 {
 		s.logs = s.logs[len(s.logs)-500:]
 	}
-	s.writeDailyLog(message)
+	s.writeDailyLog(message, logLevel(message))
 }
 
 func (s *AppServer) Connect(id, password string, remember bool) error {
@@ -654,6 +716,7 @@ func (s *AppServer) Connect(id, password string, remember bool) error {
 		}
 	}
 
+	dns := s.config.Preferences.DNS
 	s.mu.Unlock()
 	if err := s.stop(); err != nil {
 		return err
@@ -690,6 +753,7 @@ func (s *AppServer) Connect(id, password string, remember bool) error {
 	s.done = make(chan struct{})
 	done := s.done
 	s.active = id
+	s.tunnelIP = ""
 	s.cancelled = false
 	s.challenge = nil
 	s.connectedAt = 0
@@ -699,7 +763,13 @@ func (s *AppServer) Connect(id, password string, remember bool) error {
 	s.mu.Unlock()
 	go s.readChild(cmd, out, done)
 	go s.readStderr(cmd, errPipe)
-	if err = json.NewEncoder(in).Encode(engineRequest{Profile: p, Password: password}); err != nil {
+	var session engine.Session
+	if p.Remember {
+		if data, err := loadCredential(s.sessionPath(id)); err == nil {
+			_ = json.Unmarshal([]byte(data), &session)
+		}
+	}
+	if err = json.NewEncoder(in).Encode(engineRequest{Profile: p, Password: password, Session: session, DNS: dns}); err != nil {
 		_ = cmd.Process.Kill()
 		return errors.New("Could not initialize the connection process")
 	}
@@ -738,6 +808,22 @@ func (s *AppServer) readChild(cmd *exec.Cmd, out io.Reader, done chan struct{}) 
 		s.mu.Lock()
 		if s.cmd == cmd && !s.cancelled {
 			switch e.Kind {
+			case "session":
+				for _, p := range s.config.Profiles {
+					if p.ID == s.active && p.Remember && e.Session != nil && canRemember() {
+						data, err := json.Marshal(e.Session)
+						if err == nil {
+							err = saveCredential(s.sessionPath(p.ID), string(data))
+						}
+						if err != nil {
+							s.warn("Saved login session could not be updated")
+						}
+					}
+				}
+			case "tunnel_ip":
+				if ip := net.ParseIP(e.Message); ip != nil {
+					s.tunnelIP = ip.String()
+				}
 			case "traffic":
 				if s.state == "connected" {
 					s.traffic = e.Traffic
@@ -746,6 +832,17 @@ func (s *AppServer) readChild(cmd *exec.Cmd, out io.Reader, done chan struct{}) 
 				s.record(e.State, e.Message)
 				if e.State == "connected" {
 					s.connectedAt = time.Now().UnixMilli()
+					for _, p := range s.config.Profiles {
+						if p.ID == s.active && (p.Options.BrowserProxy == nil || *p.Options.BrowserProxy) {
+							var err error
+							s.restoreProxy, err = enableBrowserProxy(s.dir, p)
+							if err != nil {
+								s.warn("[warn] Browser proxy setup failed: " + err.Error())
+							} else {
+								s.warn("校园浏览器代理已启用，其他域名保留原代理路径")
+							}
+						}
+					}
 				}
 			case "challenge":
 				challengeCopy := e
@@ -761,6 +858,12 @@ func (s *AppServer) readChild(cmd *exec.Cmd, out io.Reader, done chan struct{}) 
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.cmd == cmd {
+		if s.restoreProxy != nil {
+			if err := s.restoreProxy(); err != nil {
+				s.warn("[warn] Browser proxy restore failed: " + err.Error())
+			}
+			s.restoreProxy = nil
+		}
 		if s.cancelled {
 			s.record("disconnected", "Disconnected")
 		} else if s.state != "error" {
@@ -779,8 +882,32 @@ func (s *AppServer) readChild(cmd *exec.Cmd, out io.Reader, done chan struct{}) 
 	}
 	close(done)
 }
+
+func (s *AppServer) sessionPath(id string) string {
+	return filepath.Join(s.dir, "session-"+id+".bin")
+}
+
+func logLevel(message string) string {
+	lower := strings.ToLower(message)
+	switch {
+	case strings.Contains(lower, "error"), strings.Contains(lower, "failed"), strings.Contains(lower, "panic"), strings.Contains(lower, "失败"), strings.Contains(lower, "错误"):
+		return "error"
+	case strings.Contains(lower, "warn"), strings.Contains(lower, "警告"), strings.Contains(lower, "[stderr]"):
+		return "warn"
+	case strings.Contains(lower, "[debug]"):
+		return "debug"
+	default:
+		return "info"
+	}
+}
 func (s *AppServer) stop() error {
 	s.mu.Lock()
+	if s.restoreProxy != nil {
+		if err := s.restoreProxy(); err != nil {
+			s.warn("[warn] Browser proxy restore failed: " + err.Error())
+		}
+		s.restoreProxy = nil
+	}
 	if s.cmd == nil {
 		s.mu.Unlock()
 		return nil

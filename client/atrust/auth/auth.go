@@ -315,7 +315,7 @@ func (s *Session) Login(method LoginMethod, opts LoginOptions) (LoginResult, err
 		}
 	}
 	// 2. 如果未指定 LoginDomain，或找不到指定域，则智能推导相同 AuthType 的最适合认证项
-	if foundAuthInfo == nil {
+	if foundAuthInfo == nil && method.LoginDomain() == "" {
 		var fallbackNonLocal *AuthInfo
 		var fallbackAny *AuthInfo
 		for _, authInfo := range authInfoList {

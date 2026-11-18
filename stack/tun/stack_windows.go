@@ -17,7 +17,7 @@ import (
 )
 
 const guid = "{4F5CDE94-D2A3-4AA5-A4A3-0FE6CB909E83}"
-const interfaceName = "CampusWay"
+const interfaceName = "RouteDesk"
 
 type Endpoint struct {
 	client client.Client

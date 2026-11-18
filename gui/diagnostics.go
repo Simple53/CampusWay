@@ -69,9 +69,9 @@ func getProfileDiagnosticSites(prof *Profile) []struct{ name, url string } {
 	if strings.Contains(server, "zju.edu.cn") || strings.Contains(name, "zju") || strings.Contains(name, "浙大") {
 		return []struct{ name, url string }{
 			{"浙大办公网", "https://service.zju.edu.cn"},
-			{"教务系统", "https://jwgl.zju.edu.cn"},
+			{"教务系统", "http://zdbk.zju.edu.cn/"},
 			{"图书资源", "https://lib.zju.edu.cn"},
-			{"知网 (CNKI)", "https://www.cnki.net"},
+			{"CC98", "http://cc98.org/"},
 		}
 	}
 	if strings.Contains(server, "nnu.edu.cn") || strings.Contains(server, "njnu.edu.cn") || strings.Contains(name, "nnu") || strings.Contains(name, "南师") {
@@ -79,7 +79,7 @@ func getProfileDiagnosticSites(prof *Profile) []struct{ name, url string } {
 			{"办事大厅", "https://ehallapp.nnu.edu.cn"},
 			{"教务系统", "http://jwgl.njnu.edu.cn"},
 			{"知网 (CNKI)", "https://www.cnki.net"},
-			{"公共网关", "https://www.baidu.com"},
+			{"政工之家", "http://zgzj.njnu.edu.cn/"},
 		}
 	}
 
@@ -99,6 +99,7 @@ func (s *AppServer) RunDiagnostics() (DiagnosticReport, error) {
 		}
 	}
 	connected := s.state == "connected"
+	links := append([]WebsiteLink(nil), s.config.Preferences.WebsiteLinks...)
 	s.mu.Unlock()
 
 	report := DiagnosticReport{Connected: connected, Targets: []DiagnosticTarget{}, LocalIP: outboundIP()}
@@ -113,6 +114,14 @@ func (s *AppServer) RunDiagnostics() (DiagnosticReport, error) {
 	}
 
 	sites := getProfileDiagnosticSites(prof)
+	if len(links) != 0 {
+		sites = nil
+		for _, site := range links {
+			if u, err := parseWebsiteURL(site.URL); err == nil {
+				sites = append(sites, struct{ name, url string }{site.Name, u.String()})
+			}
+		}
+	}
 
 	report.Targets = make([]DiagnosticTarget, len(sites))
 	proxyURL, _ := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", httpPort))
@@ -135,10 +144,13 @@ func (s *AppServer) RunDiagnostics() (DiagnosticReport, error) {
 			start := time.Now()
 			req, err := http.NewRequestWithContext(context.Background(), "GET", target, nil)
 			if err == nil {
-				req.Header.Set("User-Agent", "Mozilla/5.0 CampusWay")
+				req.Header.Set("User-Agent", "Mozilla/5.0 RouteDesk")
 				var resp *http.Response
 				if resp, err = client.Do(req); err == nil {
 					_ = resp.Body.Close()
+					if resp.StatusCode >= 500 {
+						err = fmt.Errorf("HTTP %d", resp.StatusCode)
+					}
 				}
 			}
 			row.MS = time.Since(start).Milliseconds()

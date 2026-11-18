@@ -2,80 +2,57 @@ package atrust
 
 import (
 	"context"
-	"net"
-	"strconv"
-	"strings"
+	"crypto/tls"
 	"time"
 
-	"github.com/nnu-connect/nnu-connect/internal/ping"
 	"github.com/nnu-connect/nnu-connect/log"
 )
 
-const pingNum = 3
+type nodeGroup struct {
+	wan []string
+	lan []string
+}
 
-func getBestNodes(nodeGroups map[string][]string, dialContext func(context.Context, string, string) (net.Conn, error)) map[string]string {
-	bestNodes := make(map[string]string)
-	for group, nodes := range nodeGroups {
-		if len(nodes) > 1 {
-			var pingList []ping.TCPing
-			var chList []<-chan struct{}
-
-			for _, node := range nodes {
-				parts := strings.Split(node, ":")
-				host := parts[0]
-				port, err := strconv.Atoi(parts[1])
-				if err != nil {
-					continue
-				}
-
-				tcping := ping.NewTCPing()
-				tcping.SetDialContext(dialContext)
-				target := ping.Target{
-					Protocol: ping.TCP,
-					Host:     host,
-					Port:     port,
-					Counter:  pingNum,
-					Interval: time.Duration(0.5 * float64(time.Second)),
-					Timeout:  time.Duration(1 * float64(time.Second)),
-				}
-				tcping.SetTarget(&target)
-
-				pingList = append(pingList, *tcping)
-				ch := tcping.Start()
-				chList = append(chList, ch)
-			}
-
-			for _, ch := range chList {
-				<-ch
-			}
-
-			bestLatency := int64(0)
-			bestNode := ""
-			for i, tcping := range pingList {
-				result := tcping.Result()
-				if result.SuccessCounter == pingNum {
-					latency := result.Avg().Milliseconds()
-
-					if bestLatency == 0 || latency < bestLatency {
-						bestNode = nodes[i]
-						bestLatency = latency
-					}
-				}
-			}
-
-			if bestNode != "" {
-				bestNodes[group] = bestNode
-				log.Printf("Best node in group %s: %s with latency %d ms", group, bestNode, bestLatency)
-			} else {
-				log.Printf("No reachable node in group %s, using the first node", group)
-				bestNodes[group] = nodes[0]
-			}
-		} else if len(nodes) == 1 {
-			bestNodes[group] = nodes[0]
+func (c *Client) probeNodes(ctx context.Context) map[string]string {
+	best := make(map[string]string)
+	for group, nodes := range c.NodeGroups {
+		node := c.probeNodeGroup(ctx, nodes.wan)
+		if node == "" {
+			node = c.probeNodeGroup(ctx, nodes.lan)
+		}
+		if node != "" {
+			best[group] = node
+			log.Printf("aTrust TLS node for group %s: %s", group, node)
 		}
 	}
+	return best
+}
 
-	return bestNodes
+func (c *Client) probeNodeGroup(ctx context.Context, nodes []string) string {
+	if len(nodes) == 0 || ctx.Err() != nil {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	results := make(chan string, len(nodes))
+	for _, node := range nodes {
+		go func() {
+			conn, err := c.underlayDialer.DialTLSContext(ctx, "tcp", node, &tls.Config{InsecureSkipVerify: true})
+			if err != nil {
+				log.DebugPrintf("aTrust node %s TLS probe failed: %v", node, err)
+				results <- ""
+				return
+			}
+			results <- node
+			_ = conn.Close()
+		}()
+	}
+	for range nodes {
+		if node := <-results; node != "" {
+			return node
+		}
+	}
+	return ""
 }
 
 func (c *Client) updateBestNodes(ctx context.Context, updateBestNodesInterval int) {
@@ -89,9 +66,11 @@ func (c *Client) updateBestNodes(ctx context.Context, updateBestNodesInterval in
 		case <-ticker.C:
 		}
 
-		bestNodes := getBestNodes(c.NodeGroups, c.underlayDialer.DialContext)
+		bestNodes := c.probeNodes(ctx)
 		c.BestNodesRWMutex.Lock()
-		c.BestNodes = bestNodes
+		for group, node := range bestNodes {
+			c.BestNodes[group] = node
+		}
 		c.BestNodesRWMutex.Unlock()
 	}
 }

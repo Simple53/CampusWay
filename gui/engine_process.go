@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	stdlog "log"
 	"net"
@@ -26,6 +25,8 @@ const eventPrefix = "CAMPUSWAY_EVENT "
 type engineRequest struct {
 	Profile  Profile
 	Password string
+	Session  engine.Session
+	DNS      DNSOverrides
 }
 type engineCommand struct{ Kind, ID, Answer string }
 
@@ -149,12 +150,15 @@ func runEngine() {
 		}
 		stdlog.Printf("[Init] 域名解析成功: %s -> [%s]", p.Server, strings.Join(ipStrs, ", "))
 		if hasFakeIP {
-			stdlog.Printf("[警告] 检测到网关 IP 属于 Fake-IP 范围 (198.18.0.0/15)，正被本机 Clash/Mihomo 代理劫持，可能导致握手超时！建议暂时关闭系统代理后重试。")
+			stdlog.Printf("[Init] 系统 DNS 返回 Fake-IP；底层连接将解析真实地址。PROCESS-NAME 规则只控制流量路由，不改变 DNS 响应。")
 		}
 	}
 	stdlog.Printf("[Init] 本地代理预定端口: SOCKS5 127.0.0.1:%d, HTTP 127.0.0.1:%d (将在网关握手认证通过后启动绑定)", p.Options.SocksPort, p.Options.HTTPPort)
 
 	conf := configs.Config{Protocol: p.Protocol, ServerAddress: p.Server, ServerPort: p.Port, Username: p.Username, Password: request.Password, DisablePresetConfig: false, SocksBind: fmt.Sprintf("127.0.0.1:%d", p.Options.SocksPort), HTTPBind: fmt.Sprintf("127.0.0.1:%d", p.Options.HTTPPort), RemoteDNSServer: p.Options.RemoteDNS, SecondaryDNSServer: p.Options.SecondaryDNS, DNSTTL: uint64(p.Options.DNSTTL), DisableKeepAlive: true, AuthType: p.Options.AuthType, Phone: p.Username, LoginDomain: p.Options.LoginDomain, UpdateBestNodesInterval: p.Options.UpdateInterval, TCPTunnelMode: p.Options.TCPOnly, DisableRemoteDNS: p.Options.DisableRemoteDNS, DisableMultiLine: p.Options.DisableMultiLine, DisableServerConfig: p.Options.DisableServerConfig, SkipDomainResource: p.Options.SkipDomainResource, ProxyAll: p.Options.ProxyAll}
+	if request.DNS.Enabled {
+		request.DNS.apply(&conf)
+	}
 	conf.CustomProxyDomain = strings.FieldsFunc(p.CustomDomains, func(r rune) bool { return r == ',' || r == ';' || r == '\n' || r == ' ' })
 	// A private worker owns this counter lifetime; rates use the real sample interval.
 	go func() {
@@ -175,12 +179,15 @@ func runEngine() {
 		}
 	}()
 
-	err := engine.Run(ctx, conf, func(state, msg string) {
+	err := engine.RunWithSession(ctx, conf, func(state, msg string) {
 		if state == "disconnected" {
 			return
 		}
+		if state == "tunnel_ip" {
+			emit(Event{Kind: "tunnel_ip", Message: msg})
+			return
+		}
 		if state == "error" {
-			emit(Event{Kind: "state", State: "error", Message: explainConnectError(p.Server, errors.New(msg))})
 			return
 		}
 		statusMsg := msg
@@ -193,6 +200,8 @@ func runEngine() {
 			statusMsg = messages[state]
 		}
 		emit(Event{Kind: "state", State: state, Message: statusMsg})
+	}, request.Session, func(session engine.Session) {
+		emit(Event{Kind: "session", Session: &session})
 	})
 	if err != nil && ctx.Err() == nil {
 		emit(Event{Kind: "state", State: "error", Message: explainConnectError(p.Server, err)})
@@ -227,10 +236,12 @@ func explainConnectError(server string, err error) string {
 	text := strings.ToLower(raw)
 	transport := strings.Contains(text, "eof") || strings.Contains(text, "timeout") || strings.Contains(text, "reset") || strings.Contains(text, "refused") || strings.Contains(text, "deadline")
 	switch {
-	case transport && gatewayIntercepted(server):
-		return "Gateway traffic is intercepted by a local proxy (fake-IP DNS)"
+	case strings.Contains(text, "fake-ip"):
+		return "Real DNS lookup failed while local DNS returns fake-IP"
 	case strings.Contains(text, "no such host") || strings.Contains(text, "lookup"):
 		return "Gateway hostname could not be resolved"
+	case strings.Contains(text, "atrust virtual ip setup"):
+		return "aTrust virtual IP setup failed. See connection logs for the node and stage."
 	case transport:
 		return "Gateway is unreachable or closed the connection"
 	case strings.Contains(text, "login failed") || strings.Contains(text, "password") || strings.Contains(text, "auth"):

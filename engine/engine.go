@@ -27,6 +27,12 @@ import (
 
 type StatusCallback func(status string, message string)
 
+// Session contains gateway-issued login state; desktop callers encrypt it at rest.
+type Session struct {
+	TwfID    string `json:"twfID,omitempty"`
+	AuthData []byte `json:"authData,omitempty"`
+}
+
 func deriveGatewayRootDomain(serverAddr string) string {
 	host := strings.TrimSpace(serverAddr)
 	if h, _, err := net.SplitHostPort(host); err == nil {
@@ -50,16 +56,29 @@ func deriveGatewayRootDomain(serverAddr string) string {
 	return strings.Join(labels[len(labels)-2:], ".")
 }
 
+func CampusDomains(serverAddr string) []string {
+	root := deriveGatewayRootDomain(serverAddr)
+	if root == "nnu.edu.cn" || root == "njnu.edu.cn" {
+		return []string{"nnu.edu.cn", "njnu.edu.cn"}
+	}
+	if root == "zju.edu.cn" {
+		return []string{root, "cc98.org"}
+	}
+	if root == "" {
+		return nil
+	}
+	return []string{root}
+}
+
 // Run runs the VPN engine lifecycle until ctx is cancelled.
 func Run(ctx context.Context, conf configs.Config, onStatus StatusCallback) error {
+	return RunWithSession(ctx, conf, onStatus, Session{}, nil)
+}
+
+func RunWithSession(ctx context.Context, conf configs.Config, onStatus StatusCallback, session Session, onSession func(Session)) error {
+	var vpnClient client.Client
 	hook_func.BeginTerminalSession()
-	defer func() {
-		if errs := hook_func.ExecTerminalFunc(context.Background()); errs != nil {
-			for _, err := range errs {
-				log.Printf("Shutdown CampusWay hook error: %s", err)
-			}
-		}
-	}()
+	defer func() { shutdownClient(vpnClient) }()
 
 	if onStatus != nil {
 		onStatus("connecting", "正在初始化 VPN 核心引擎...")
@@ -71,7 +90,7 @@ func Run(ctx context.Context, conf configs.Config, onStatus StatusCallback) erro
 
 	if errs := hook_func.ExecInitialFunc(ctx, conf); errs != nil {
 		for _, err := range errs {
-			log.Printf("Initial CampusWay failed: %s", err)
+			log.Printf("Initial RouteDesk failed: %s", err)
 		}
 		if onStatus != nil {
 			onStatus("error", fmt.Sprintf("初始化失败: %v", errs[0]))
@@ -79,7 +98,6 @@ func Run(ctx context.Context, conf configs.Config, onStatus StatusCallback) erro
 		return fmt.Errorf("initial failed: %v", errs)
 	}
 
-	var vpnClient client.Client
 	switch conf.Protocol {
 	case "easyconnect":
 		if onStatus != nil {
@@ -111,6 +129,9 @@ func Run(ctx context.Context, conf configs.Config, onStatus StatusCallback) erro
 			serverAddr = net.JoinHostPort(conf.ServerAddress, "443")
 		}
 
+		if conf.TwfID == "" {
+			conf.TwfID = session.TwfID
+		}
 		vpnClient = easyconnectclient.NewClient(
 			serverAddr,
 			conf.Username,
@@ -124,6 +145,7 @@ func Run(ctx context.Context, conf configs.Config, onStatus StatusCallback) erro
 		)
 
 		log.Printf("VPN protocol: %s, server: %s", conf.Protocol, serverAddr)
+		defer cancelClientOnContext(ctx, vpnClient)()
 		err := vpnClient.(*easyconnectclient.Client).Setup(conf.GraphCodeFile, conf.BindInterface, conf.AutoDetectInterface)
 		if err != nil {
 			if onStatus != nil {
@@ -146,6 +168,7 @@ func Run(ctx context.Context, conf configs.Config, onStatus StatusCallback) erro
 		}
 
 		var clientData []byte
+		clientData = session.AuthData
 		if conf.ClientDataFile != "" {
 			clientData, err = os.ReadFile(conf.ClientDataFile)
 			if err != nil {
@@ -154,6 +177,7 @@ func Run(ctx context.Context, conf configs.Config, onStatus StatusCallback) erro
 		}
 
 		vpnClient = atrustclient.NewClient(conf.Username, conf.SID, conf.DeviceID, conf.SignKey)
+		defer cancelClientOnContext(ctx, vpnClient)()
 		vpnClient.(*atrustclient.Client).SetSkipTCPTunnelWait(conf.SkipTCPTunnelWait)
 
 		clientData, err = vpnClient.(*atrustclient.Client).Setup(
@@ -173,15 +197,16 @@ func Run(ctx context.Context, conf configs.Config, onStatus StatusCallback) erro
 			conf.BindInterface,
 			conf.AutoDetectInterface,
 		)
-		if err != nil {
-			if onStatus != nil {
-				onStatus("error", fmt.Sprintf("aTrust 认证失败: %s", err.Error()))
+		if len(clientData) != 0 {
+			if conf.ClientDataFile != "" {
+				_ = os.WriteFile(conf.ClientDataFile, clientData, 0600)
 			}
-			return fmt.Errorf("aTrust setup error: %w", err)
+			if onSession != nil {
+				onSession(Session{AuthData: clientData})
+			}
 		}
-
-		if conf.ClientDataFile != "" {
-			_ = os.WriteFile(conf.ClientDataFile, clientData, 0644)
+		if err != nil {
+			return fmt.Errorf("aTrust setup error: %w", err)
 		}
 
 	default:
@@ -189,6 +214,12 @@ func Run(ctx context.Context, conf configs.Config, onStatus StatusCallback) erro
 	}
 
 	log.Printf("VPN client authentication success")
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if conf.Protocol == "easyconnect" && onSession != nil {
+		onSession(Session{TwfID: vpnClient.(*easyconnectclient.Client).SessionID()})
+	}
 	if closer, ok := vpnClient.(interface{ Close() }); ok {
 		hook_func.RegisterTerminalFunc("CloseVPNClient", func(ctx context.Context) error {
 			closer.Close()
@@ -201,46 +232,35 @@ func Run(ctx context.Context, conf configs.Config, onStatus StatusCallback) erro
 	domainResources, _ := vpnClient.DomainResources()
 	dnsResource, _ := vpnClient.DNSResource()
 
-	if conf.Protocol == "easyconnect" {
-		if !conf.DisablePresetConfig {
-			if domainResources == nil {
-				domainResources = make(map[string]client.DomainResource)
-			}
-
-			if rootDomain := deriveGatewayRootDomain(conf.ServerAddress); rootDomain != "" {
-				domainResources[rootDomain] = client.DomainResource{
-					PortMin:  1,
-					PortMax:  65535,
-					Protocol: "all",
-				}
-			}
-
-			if ipResources == nil {
-				ipResources = []client.IPResource{}
-			}
-
-			// IP routes come from the VPN gateway. Broad private ranges such as
-			// 10.0.0.0/8 can overlap with the user's LAN and are not safe defaults.
-		}
-
-		// Add user-configured custom proxy domains
-		if domainResources == nil {
-			domainResources = make(map[string]client.DomainResource)
-		}
-		for _, customProxyDomain := range conf.CustomProxyDomain {
-			if customProxyDomain != "" {
-				domainResources[customProxyDomain] = client.DomainResource{
-					PortMin:  1,
-					PortMax:  65535,
-					Protocol: "all",
-				}
-				log.Printf("Added custom proxy domain: %s", customProxyDomain)
+	if domainResources == nil {
+		domainResources = make(map[string]client.DomainResource)
+	}
+	addDomain := func(domain string) {
+		domain = strings.Trim(strings.ToLower(strings.TrimSpace(domain)), ".")
+		if domain != "" {
+			if _, exists := domainResources[domain]; !exists {
+				domainResources[domain] = client.DomainResource{PortMin: 1, PortMax: 65535, Protocol: "all"}
 			}
 		}
+	}
+	if !conf.DisablePresetConfig {
+		for _, domain := range CampusDomains(conf.ServerAddress) {
+			addDomain(domain)
+		}
+	}
+	for _, domain := range conf.CustomProxyDomain {
+		addDomain(domain)
+	}
+	if conf.Protocol == "easyconnect" && !conf.DisablePresetConfig && ipResources == nil {
+		ipResources = []client.IPResource{}
 	}
 
 	var vpnStack stack.Stack
 	var err error
+	if conf.TCPTunnelMode && !vpnClient.CanUseTCPTunnel() {
+		log.Println("TCP-only mode is unavailable for EasyConnect; using the L3 tunnel")
+		conf.TCPTunnelMode = false
+	}
 	if conf.TCPTunnelMode {
 		vpnStack, err = tcptunnel.NewStack(vpnClient)
 		if err != nil {
@@ -377,21 +397,47 @@ func Run(ctx context.Context, conf configs.Config, onStatus StatusCallback) erro
 	}
 
 	if onStatus != nil {
+		if ip, err := vpnClient.IP(); err == nil && ip != nil {
+			onStatus("tunnel_ip", ip.String())
+		}
 		onStatus("connected", fmt.Sprintf("已成功连接至 %s (SOCKS5: %s, HTTP: %s)", conf.ServerAddress, conf.SocksBind, conf.HTTPBind))
 	}
 
 	// Block until context canceled
 	<-ctx.Done()
 
-	log.Println("Shutting down CampusWay ......")
+	log.Println("Shutting down RouteDesk ......")
 	if onStatus != nil {
 		onStatus("disconnecting", "正在断开连接并清理网络规则...")
 	}
 
-	log.Println("CampusWay shutdown complete. Bye~")
+	log.Println("RouteDesk shutdown complete. Bye~")
 	if onStatus != nil {
 		onStatus("disconnected", "已断开连接")
 	}
 
 	return nil
+}
+
+func shutdownClient(vpnClient client.Client) {
+	// Readers must see shutdown before cancellation closes their sockets.
+	for _, err := range hook_func.ExecTerminalFunc(context.Background()) {
+		log.Printf("Shutdown RouteDesk hook error: %s", err)
+	}
+	if closer, ok := vpnClient.(interface{ Close() }); ok {
+		closer.Close()
+	}
+}
+
+func cancelClientOnContext(ctx context.Context, vpnClient client.Client) func() {
+	done := make(chan struct{})
+	stop := context.AfterFunc(ctx, func() {
+		shutdownClient(vpnClient)
+		close(done)
+	})
+	return func() {
+		if !stop() {
+			<-done
+		}
+	}
 }

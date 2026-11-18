@@ -11,13 +11,17 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"io/fs"
 	"os"
+	"sync/atomic"
 )
 
 //go:embed static
 var staticFS embed.FS
-var version = "0.1.1"
+var version = "2.0.0"
 
 func main() {
+	if handleUpdateCommand(os.Args) {
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "--engine" {
 		runEngine()
 		return
@@ -30,10 +34,10 @@ func main() {
 	if len(app.config.Profiles) > 1 {
 		width, height = 800, 620
 	}
-	quitting := false
+	var quitting atomic.Bool
 
 	err := wails.Run(&options.App{
-		Title:             "CampusWay",
+		Title:             "RouteDesk",
 		Width:             width,
 		Height:            height,
 		MinWidth:          390,
@@ -44,9 +48,20 @@ func main() {
 		Windows:           &windows.Options{Theme: windows.SystemDefault},
 		OnStartup: func(ctx context.Context) {
 			appCtx = ctx
+			app.quitForUpdate = func() {
+				quitting.Store(true)
+				runtime.Quit(ctx)
+			}
+			// Single-instance ownership is established before OnStartup. A second
+			// launch must not restore the first instance's active proxy settings.
+			if err := restoreBrowserProxy(app.dir); err != nil {
+				app.mu.Lock()
+				app.warn("[warn] Browser proxy settings could not be restored: " + err.Error())
+				app.mu.Unlock()
+			}
 			applyWindowIcons()
 			tray = setupTray(ctx, app, func() {
-				quitting = true
+				quitting.Store(true)
 				_ = app.Disconnect()
 				if tray != nil {
 					tray.destroy()
@@ -68,9 +83,9 @@ func main() {
 		},
 		OnBeforeClose: func(ctx context.Context) bool {
 			closeAction := app.GetSnapshot().Preferences.CloseAction
-			if quitting || closeAction == "exit" {
+			if quitting.Load() || closeAction == "exit" {
 				if err := app.Disconnect(); err != nil {
-					_, _ = runtime.MessageDialog(ctx, runtime.MessageDialogOptions{Type: runtime.WarningDialog, Title: "CampusWay", Message: err.Error()})
+					_, _ = runtime.MessageDialog(ctx, runtime.MessageDialogOptions{Type: runtime.WarningDialog, Title: "RouteDesk", Message: err.Error()})
 					return true
 				}
 				if tray != nil {

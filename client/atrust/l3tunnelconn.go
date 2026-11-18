@@ -498,8 +498,8 @@ func buildAuthRequest(info clientInfo, signKey []byte, meta packetMeta, ct *conn
 }
 
 func defaultEnv(info clientInfo) *trustEnv {
-	procPath := "/usr/bin/campusway"
-	procName := "campusway"
+	procPath := "/usr/bin/routedesk"
+	procName := "routedesk"
 	fingerprint := fmt.Sprintf("%X", sha256.Sum256([]byte(procPath)))
 	platform := strings.Title(runtime.GOOS)
 	if platform == "Darwin" {
@@ -727,74 +727,55 @@ func (c *l3TunnelConn) authTunnel() error {
 		return err
 	}
 
-	method := make([]byte, 2)
-	if _, err := io.ReadFull(c.reader, method); err != nil {
+	ips, err := readTunnelAuth(c.reader)
+	if err != nil {
 		return err
 	}
-	log.DebugPrintf("l3-tunnel recv tunnel auth method len=%d", len(method))
-	log.DebugDumpHex(method)
-	if method[0] != l3Version || method[1] != 0xD0 {
-		return fmt.Errorf("l3-tunnel unexpected auth method resp: %02x %02x", method[0], method[1])
-	}
-
-	header := make([]byte, 4)
-	if _, err := io.ReadFull(c.reader, header); err != nil {
-		return err
-	}
-	log.DebugPrintf("l3-tunnel recv tunnel auth header len=%d", len(header))
-	log.DebugDumpHex(header)
-	if header[0] != 0x53 {
-		return fmt.Errorf("l3-tunnel unexpected auth resp version: 0x%02x", header[0])
-	}
-	status := header[1]
-	length := int(binary.BigEndian.Uint16(header[2:4]))
-	payload := make([]byte, length)
-	if length > 0 {
-		if _, err := io.ReadFull(c.reader, payload); err != nil {
-			return err
-		}
-	}
-	log.DebugPrintf("l3-tunnel recv tunnel auth payload len=%d status=%d", len(payload), status)
-	log.DebugDumpHex(payload)
-	if status != 0 {
-		return fmt.Errorf("l3-tunnel tunnel auth status %d", status)
-	}
-	if len(payload) > 0 {
-		var resp authResponseSID
-		if err := json.Unmarshal(payload, &resp); err != nil {
-			return err
-		}
-		if resp.Code != 0 {
-			return fmt.Errorf("l3-tunnel tunnel auth failed: %d %s", resp.Code, resp.Message)
-		}
-	}
-
-	vipHeader := make([]byte, 4)
-	if _, err := io.ReadFull(c.reader, vipHeader); err != nil {
-		return err
-	}
-	log.DebugPrintf("l3-tunnel recv tunnel vip header len=%d", len(vipHeader))
-	log.DebugDumpHex(vipHeader)
-	if vipHeader[0] != l3Version {
-		return nil
-	}
-
-	addrType := vipHeader[3]
-	dataLen := vipPayloadLength(addrType)
-	if dataLen == 0 {
-		return nil
-	}
-	vipData := make([]byte, dataLen)
-	if _, err := io.ReadFull(c.reader, vipData); err != nil {
-		return err
-	}
-	log.DebugPrintf("l3-tunnel recv tunnel vip data len=%d", len(vipData))
-	log.DebugDumpHex(vipData)
-	ips := parseVirtualIPData(vipData)
 	if len(ips) > 0 && c.onVIP != nil {
 		c.onVIP(ips)
 	}
 	return nil
+}
+
+func readTunnelAuth(reader io.Reader) ([]net.IP, error) {
+	var method [2]byte
+	if _, err := io.ReadFull(reader, method[:]); err != nil {
+		return nil, fmt.Errorf("read authentication method: %w", err)
+	}
+	if method != [2]byte{l3Version, 0xd0} {
+		return nil, fmt.Errorf("unexpected tunnel authentication method: %x", method)
+	}
+	var header [4]byte
+	if _, err := io.ReadFull(reader, header[:]); err != nil {
+		return nil, fmt.Errorf("read authentication header: %w", err)
+	}
+	if header[0] != 0x53 || header[1] != 0 {
+		return nil, fmt.Errorf("unexpected tunnel authentication header: %x", header)
+	}
+	payload := make([]byte, binary.BigEndian.Uint16(header[2:]))
+	if _, err := io.ReadFull(reader, payload); err != nil {
+		return nil, fmt.Errorf("read authentication payload: %w", err)
+	}
+	if len(payload) != 0 {
+		var response authResponseSID
+		if err := json.Unmarshal(payload, &response); err != nil {
+			return nil, err
+		}
+		if response.Code != 0 {
+			return nil, fmt.Errorf("tunnel session rejected (%d): %s", response.Code, response.Message)
+		}
+	}
+	if _, err := io.ReadFull(reader, header[:]); err != nil {
+		return nil, fmt.Errorf("read virtual IP header: %w", err)
+	}
+	if header[0] != l3Version || header[1] != 0 || header[2] != 0 {
+		return nil, fmt.Errorf("unexpected virtual IP header: %x", header)
+	}
+	data := make([]byte, vipPayloadLength(header[3]))
+	if _, err := io.ReadFull(reader, data); err != nil {
+		return nil, fmt.Errorf("read virtual IP payload: %w", err)
+	}
+	return parseVirtualIPData(data), nil
 }
 
 func wrapAuthReqData(payload []byte, addrType byte) []byte {

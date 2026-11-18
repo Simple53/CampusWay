@@ -1,7 +1,7 @@
 !include "MUI2.nsh"
-Name "CampusWay"
-OutFile "CampusWay-Setup.exe"
-InstallDir "$LOCALAPPDATA\Programs\CampusWay"
+Name "RouteDesk"
+OutFile "RouteDesk-Setup.exe"
+InstallDir "$LOCALAPPDATA\Programs\RouteDesk"
 RequestExecutionLevel user
 !define MUI_ICON "assets\campusway.ico"
 !insertmacro MUI_PAGE_WELCOME
@@ -10,20 +10,20 @@ RequestExecutionLevel user
 !insertmacro MUI_LANGUAGE "English"
 Section
 SetOutPath "$INSTDIR"
-File "..\dist\campusway\CampusWay.exe"
+File "..\dist\routedesk\RouteDesk.exe"
 File "..\LICENSE"
 File /oname=ICON-LICENSE "..\gui\static\icons\LICENSE"
 WriteUninstaller "$INSTDIR\Uninstall.exe"
-CreateShortcut "$SMPROGRAMS\CampusWay.lnk" "$INSTDIR\CampusWay.exe"
-WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\CampusWay" "DisplayName" "CampusWay"
-WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\CampusWay" "UninstallString" '$"$INSTDIR\Uninstall.exe$"'
+CreateShortcut "$SMPROGRAMS\RouteDesk.lnk" "$INSTDIR\RouteDesk.exe"
+WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\RouteDesk" "DisplayName" "RouteDesk"
+WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\RouteDesk" "UninstallString" '$"$INSTDIR\Uninstall.exe$"'
 SectionEnd
 Section "Uninstall"
-Delete "$SMPROGRAMS\CampusWay.lnk"
-Delete "$INSTDIR\CampusWay.exe"
+Delete "$SMPROGRAMS\RouteDesk.lnk"
+Delete "$INSTDIR\RouteDesk.exe"
 Delete "$INSTDIR\LICENSE"
 Delete "$INSTDIR\ICON-LICENSE"
 Delete "$INSTDIR\Uninstall.exe"
 RMDir "$INSTDIR"
-DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\CampusWay"
+DeleteRegKey HKCU "Software\Microsoft\Windows\CurrentVersion\Uninstall\RouteDesk"
 SectionEnd

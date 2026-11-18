@@ -1,6 +1,7 @@
 package tcptunnel
 
 import (
+	"errors"
 	"github.com/nnu-connect/nnu-connect/client"
 	"github.com/nnu-connect/nnu-connect/internal/ippool"
 	"github.com/nnu-connect/nnu-connect/internal/zcdns"
@@ -15,6 +16,9 @@ type Stack struct {
 func (s *Stack) Run() {}
 
 func NewStack(client client.Client) (*Stack, error) {
+	if !client.CanUseTCPTunnel() {
+		return nil, errors.New("TCP tunnel mode is not supported by this VPN protocol")
+	}
 	s := &Stack{
 		client: client,
 	}

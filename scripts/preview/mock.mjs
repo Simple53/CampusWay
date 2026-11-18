@@ -14,6 +14,7 @@ export function createPreviewBridge({delay=900,onChange=()=>{}}={}){
  }onChange();}
  const api={
  GetSnapshot:async()=>{const snapshot=clone(state);if(state.state==='connected'){
+ snapshot.tunnelIP="10.19.0.5";
  // Deterministic synthetic samples are labelled in the UI and never used by production.
  const seconds=Math.max(0,(Date.now()-state.connectedAt)/1000),wave=(Math.floor(seconds)%8)/8;
  snapshot.traffic={uploaded:Math.floor(seconds*24576),downloaded:Math.floor(seconds*393216),uploadRate:24576*(1+wave),downloadRate:393216*(1+wave),sampledAt:Date.now()};
@@ -26,9 +27,11 @@ export function createPreviewBridge({delay=900,onChange=()=>{}}={}){
  Disconnect:async()=>{generation++;state.challenge=null;emit('disconnecting','disconnecting');after(()=>{state.active='';state.connectedAt=0;emit('disconnected','disconnectedEvent');});},
  SubmitChallenge:async(id,_discardedResponse)=>{if(state.challenge?.id!==id)throw new Error('验证码已过期');state.challenge=null;emit('connecting','connectingEvent');after(connected);},
  ForgetPassword:async id=>{const p=profile(id);p.hasPassword=false;p.remember=false;},
+ GetLocalIPs:async()=>[{ip:"192.168.1.24",family:"IPv4"},{ip:"2001:db8::2",family:"IPv6"}],
+ RefreshIPInfo:async()=>({ip:"2001:db8::1",family:"IPv6",country:"中国",region:"浙江",public:true}),
  RunDiagnostics:async()=>({targets:[{name:'Apple',url:'https://www.apple.com',ok:true,ms:24},{name:'GitHub',url:'https://github.com',ok:true,ms:48},{name:'Google',url:'https://www.google.com',ok:true,ms:65},{name:'办事大厅',url:'https://ehallapp.nnu.edu.cn',ok:true,ms:18}],localIP:'10.12.34.56',dns:'127.0.0.1:53'}),
- CheckVersion:async()=>({current:'0.1.2-preview',latest:'v0.1.2',status:'A different release is available'}),
- ApplyUpdate:async()=>({version:'v0.1.2',file:'/tmp/CampusWay-0.1.2-windows-x64-portable.zip',status:'ready'}),
+ CheckVersion:async()=>({current:'0.1.2-preview',latest:'v0.1.2',install:'true',status:'A different release is available'}),
+ ApplyUpdate:async()=>({version:'v0.1.2',status:'restarting'}),
  ExportDailyLogs:async()=>`[${new Date().toISOString()}] [connecting] 正在连接网关: 校园主线路\n[${new Date().toISOString()}] [connected] 连接已建立 (模拟日志)`,
  OpenLogsFolder:async()=>{},
  MinimizeWindow:async()=>{},

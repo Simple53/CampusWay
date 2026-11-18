@@ -3,11 +3,8 @@ package atrust
 import (
 	"context"
 	"crypto/tls"
-	"encoding/binary"
+	"encoding/json"
 	"fmt"
-	"io"
-	"net"
-	"strings"
 	"time"
 
 	"github.com/nnu-connect/nnu-connect/log"
@@ -15,77 +12,46 @@ import (
 
 func (c *Client) getIP() error {
 	addr := c.BestNodes[c.MajorNodeGroup]
-	if addr == "" {
+	if addr == "" && c.MajorNodeGroup == "" {
 		for _, node := range c.BestNodes {
 			addr = node
 			break
 		}
 	}
 	if addr == "" {
-		return fmt.Errorf("no reachable node for ip request")
+		return fmt.Errorf("no advertised node completed TLS for virtual IP setup")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	if c.SID == "" {
+		return fmt.Errorf("missing authenticated session ID")
+	}
+	ctx, cancel := context.WithTimeout(c.lifecycleCtx, 10*time.Second)
 	defer cancel()
 	conn, err := c.underlayDialer.DialTLSContext(ctx, "tcp", addr, &tls.Config{InsecureSkipVerify: true})
 	if err != nil {
+		return fmt.Errorf("establish TLS to virtual IP node %s: %w", addr, err)
+	}
+	defer conn.Close()
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
+
+	payload, err := json.Marshal(authRequestSID{Sid: c.SID})
+	if err != nil {
 		return err
 	}
-	defer func(conn *tls.Conn) {
-		_ = conn.Close()
-	}(conn)
-
-	msg := []byte{0x05, 0x01, 0xd0, 0x53, 0x00, 0x00, 0x53}
-	msg = append(msg, []byte(fmt.Sprintf(`{"sid":"%s"}`, c.SID))...)
-	if _, err := conn.Write(msg); err != nil {
-		return err
+	if _, err := conn.Write(wrapAuthReqData(payload, 1)); err != nil {
+		return fmt.Errorf("send virtual IP request: %w", err)
 	}
-
-	msg = []byte{0x05, 0x04, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-	if _, err := conn.Write(msg); err != nil {
-		return err
+	ips, err := readTunnelAuth(conn)
+	if err != nil {
+		return fmt.Errorf("read virtual IP response: %w", err)
 	}
-
-	for {
-		err = conn.SetReadDeadline(time.Now().Add(10 * time.Second))
-		if err != nil {
-			return err
-		}
-
-		header := make([]byte, 2)
-		_, err = io.ReadFull(conn, header)
-		if err != nil {
-			return err
-		}
-		if header[0] == 0x53 && header[1] == 0x00 {
-			lengthBytes := make([]byte, 2)
-			_, err = io.ReadFull(conn, lengthBytes)
-			if err != nil {
-				return err
-			}
-			length := binary.BigEndian.Uint16(lengthBytes)
-			data := make([]byte, length)
-			_, err = io.ReadFull(conn, data)
-			if err != nil {
-				return err
-			}
-
-			if !strings.Contains(string(data), "OK") {
-				return fmt.Errorf("failed to connect to the server: %s", string(data))
-			}
-		} else if header[0] == 0x05 && header[1] == 0x00 {
-			data := make([]byte, 6)
-			_, err = io.ReadFull(conn, data)
-			if err != nil {
-				return err
-			}
-			if data[0] != 0x00 || data[1] != 0x01 {
-				return fmt.Errorf("unexpected response: %x", data)
-			}
-
-			c.ip = net.IPv4(data[2], data[3], data[4], data[5])
+	for _, ip := range ips {
+		if ip.To4() != nil {
+			c.ip = ip.To4()
 			log.Printf("Received IP: %s", c.ip.String())
 			return nil
 		}
 	}
+	return fmt.Errorf("gateway did not return a virtual IPv4 address")
 }

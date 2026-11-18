@@ -33,3 +33,8 @@ gui/*.syso
 
 __pycache__/
 *.pyc
+.playwright-cli/
+output/playwright/
+
+/RouteDesk.exe
+/routedesk-cli.exe

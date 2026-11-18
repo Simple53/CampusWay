@@ -146,8 +146,18 @@ func (c *Client) DialTCP(ctx context.Context, addr *net.TCPAddr) (net.Conn, erro
 
 func (c *Client) Setup(graphCodeFile, bindInterface string, autoDetectInterface bool) error {
 	c.setupUnderlay(bindInterface, autoDetectInterface)
-	return c.setup(graphCodeFile)
+	reusing := c.twfID != ""
+	err := c.setup(graphCodeFile)
+	if err != nil && reusing && c.lifecycleCtx.Err() == nil {
+		log.Println("Saved EasyConnect session expired; authenticating again")
+		c.twfID = ""
+		c.token = nil
+		return c.setup(graphCodeFile)
+	}
+	return err
 }
+
+func (c *Client) SessionID() string { return c.twfID }
 
 func (c *Client) setup(graphCodeFile string) error {
 	// Use username/password/(SMS code) to get the TwfID
@@ -166,7 +176,7 @@ func (c *Client) setup(graphCodeFile string) error {
 		} else {
 			err := c.parseLineListFromConfig(configStr)
 			if err != nil {
-				log.Printf("Error occurred while parsing config: %v", err)
+				log.Printf("Using the original gateway (no alternate lines): %v", err)
 			} else {
 				log.Printf("Line list: %v", c.lineList)
 
@@ -201,12 +211,12 @@ func (c *Client) setup(graphCodeFile string) error {
 	if c.parseResource {
 		resources, err := c.requestResources()
 		if err != nil {
-			log.Printf("Error occurred while requesting resources: %v", err)
+			return err
 		} else {
 			// Parse the resources
 			err = c.parseResources(resources)
 			if err != nil {
-				log.Printf("Error occurred while parsing resources: %v", err)
+				return err
 			}
 		}
 	}
@@ -265,10 +275,24 @@ func (c *Client) setHTTPTransport(tlsConfig *tls.Config) {
 }
 
 func (c *Client) dialContext(ctx context.Context, network, address string) (net.Conn, error) {
-	if c.underlayDialer == nil {
-		return (&net.Dialer{}).DialContext(ctx, network, address)
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	stop := context.AfterFunc(c.lifecycleCtx, cancel)
+	defer stop()
+	defer cancel()
+	if c.lifecycleCtx.Err() != nil {
+		return nil, c.lifecycleCtx.Err()
 	}
-	return c.underlayDialer.DialContext(ctx, network, address)
+	var conn net.Conn
+	var err error
+	if c.underlayDialer == nil {
+		conn, err = (&net.Dialer{}).DialContext(ctx, network, address)
+	} else {
+		conn, err = c.underlayDialer.DialContext(ctx, network, address)
+	}
+	if err == nil {
+		context.AfterFunc(c.lifecycleCtx, func() { _ = conn.Close() })
+	}
+	return conn, err
 }
 
 func (c *Client) sessionKeepAliveLoop() {
@@ -279,9 +303,7 @@ func (c *Client) sessionKeepAliveLoop() {
 		case <-c.lifecycleCtx.Done():
 			return
 		case <-ticker.C:
-			ctx, cancel := context.WithTimeout(c.lifecycleCtx, 10*time.Second)
-			cancel()
-			if err := c.requestUpdateSession(ctx); err != nil {
+			if err := c.keepSessionAlive(); err != nil {
 				if err == errNotFound {
 					log.Println("server does not support update_session, stopping keepalive")
 					return
@@ -290,4 +312,10 @@ func (c *Client) sessionKeepAliveLoop() {
 			}
 		}
 	}
+}
+
+func (c *Client) keepSessionAlive() error {
+	ctx, cancel := context.WithTimeout(c.lifecycleCtx, 10*time.Second)
+	defer cancel()
+	return c.requestUpdateSession(ctx)
 }

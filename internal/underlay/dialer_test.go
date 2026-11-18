@@ -64,7 +64,7 @@ func TestDialContextRedetectsAndRetriesOnNewInterface(t *testing.T) {
 	}
 
 	dialer := &Dialer{interfaceName: "old-interface", autoDetect: true}
-	conn, err := dialer.DialContext(context.Background(), "tcp", "example.com:443")
+	conn, err := dialer.DialContext(context.Background(), "tcp", "192.0.2.1:443")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestDialContextDoesNotReplaceManualInterface(t *testing.T) {
 	}
 
 	dialer := New("invalid.invalid:443", Options{InterfaceName: "manual-interface", AutoDetect: true})
-	_, err := dialer.DialContext(context.Background(), "tcp", "example.com:443")
+	_, err := dialer.DialContext(context.Background(), "tcp", "192.0.2.1:443")
 	if !errors.Is(err, wantErr) {
 		t.Fatalf("DialContext error = %v, want %v", err, wantErr)
 	}

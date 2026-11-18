@@ -67,7 +67,9 @@ func StartHTTP(bindAddr string, dialer *dial.Dialer) error {
 
 	handlerFunc := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if req.Method == "CONNECT" {
-			serverConn, err := dialer.Dial(context.Background(), "tcp", req.Host)
+			ctx, cancel := context.WithTimeout(req.Context(), 15*time.Second)
+			serverConn, err := dialer.Dial(ctx, "tcp", req.Host)
+			cancel()
 			if err != nil {
 				w.WriteHeader(500)
 				_, _ = w.Write([]byte(err.Error() + "\n"))
